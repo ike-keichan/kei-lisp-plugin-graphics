@@ -2,7 +2,7 @@
   "version": "0.2",
   "language": "en",
   "words": ["keisuke", "ikeda", "kei-lisp"],
-  "dictionaries": ["lisp", "kei-lisp", "tool"],
+  "dictionaries": ["lisp", "kei-lisp", "tool", "graphics"],
   "dictionaryDefinitions": [
     {
       "name": "lisp",
@@ -15,6 +15,10 @@
     {
       "name": "tool",
       "path": "./configs/cspell/tool.txt"
+    },
+    {
+      "name": "graphics",
+      "path": "./configs/cspell/graphics.txt"
     }
   ],
   "ignorePaths": ["node_modules/", "dist/", "pnpm-lock.yaml", "out/"]
