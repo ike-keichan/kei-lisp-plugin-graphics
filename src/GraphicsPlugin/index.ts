@@ -165,6 +165,143 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   /**
+   * Implementation of the Lisp `gfill` function. Fills the current path.
+   * @return the symbol `t`
+   */
+  gFill(): LispValue {
+    this.requireOpen();
+    this.ctx.fill();
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gstroke` function. Strokes the current path.
+   * @return the symbol `t`
+   */
+  gStroke(): LispValue {
+    this.requireOpen();
+    this.ctx.stroke();
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gfill-rect` function. Fills a rectangle.
+   * @param args the argument Cons (x, y, width, height)
+   * @return the symbol `t`
+   */
+  gFillRect(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 4, 'gfill-rect');
+    const x = this.requireNumberAt(args, 0, 'gfill-rect');
+    const y = this.requireNumberAt(args, 1, 'gfill-rect');
+    const w = this.requireNumberAt(args, 2, 'gfill-rect');
+    const h = this.requireNumberAt(args, 3, 'gfill-rect');
+    this.ctx.fillRect(x, y, w, h);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gstroke-rect` function. Strokes a rectangle.
+   * @param args the argument Cons (x, y, width, height)
+   * @return the symbol `t`
+   */
+  gStrokeRect(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 4, 'gstroke-rect');
+    const x = this.requireNumberAt(args, 0, 'gstroke-rect');
+    const y = this.requireNumberAt(args, 1, 'gstroke-rect');
+    const w = this.requireNumberAt(args, 2, 'gstroke-rect');
+    const h = this.requireNumberAt(args, 3, 'gstroke-rect');
+    this.ctx.strokeRect(x, y, w, h);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gfill-text` function. Fills text at (x, y).
+   * @param args the argument Cons (text, x, y)
+   * @return the symbol `t`
+   */
+  gFillText(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 3, 'gfill-text');
+    const text = this.requireStringAt(args, 0, 'gfill-text');
+    const x = this.requireNumberAt(args, 1, 'gfill-text');
+    const y = this.requireNumberAt(args, 2, 'gfill-text');
+    this.ctx.fillText(text, x, y);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gstroke-text` function. Strokes text at (x, y).
+   * @param args the argument Cons (text, x, y)
+   * @return the symbol `t`
+   */
+  gStrokeText(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 3, 'gstroke-text');
+    const text = this.requireStringAt(args, 0, 'gstroke-text');
+    const x = this.requireNumberAt(args, 1, 'gstroke-text');
+    const y = this.requireNumberAt(args, 2, 'gstroke-text');
+    this.ctx.strokeText(text, x, y);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gfill-tri` function. Fills a triangle
+   * described by three vertex pairs.
+   * @param args the argument Cons (x1, y1, x2, y2, x3, y3)
+   * @return the symbol `t`
+   */
+  gFillTri(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 6, 'gfill-tri');
+    const x1 = this.requireNumberAt(args, 0, 'gfill-tri');
+    const y1 = this.requireNumberAt(args, 1, 'gfill-tri');
+    const x2 = this.requireNumberAt(args, 2, 'gfill-tri');
+    const y2 = this.requireNumberAt(args, 3, 'gfill-tri');
+    const x3 = this.requireNumberAt(args, 4, 'gfill-tri');
+    const y3 = this.requireNumberAt(args, 5, 'gfill-tri');
+    this.ctx.beginPath();
+    this.ctx.moveTo(x1, y1);
+    this.ctx.lineTo(x2, y2);
+    this.ctx.lineTo(x3, y3);
+    this.ctx.fill();
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gstroke-tri` function. Strokes the outline of
+   * a triangle described by three vertex pairs.
+   * @param args the argument Cons (x1, y1, x2, y2, x3, y3)
+   * @return the symbol `t`
+   */
+  gStrokeTri(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 6, 'gstroke-tri');
+    const x1 = this.requireNumberAt(args, 0, 'gstroke-tri');
+    const y1 = this.requireNumberAt(args, 1, 'gstroke-tri');
+    const x2 = this.requireNumberAt(args, 2, 'gstroke-tri');
+    const y2 = this.requireNumberAt(args, 3, 'gstroke-tri');
+    const x3 = this.requireNumberAt(args, 4, 'gstroke-tri');
+    const y3 = this.requireNumberAt(args, 5, 'gstroke-tri');
+    this.ctx.beginPath();
+    this.ctx.moveTo(x1, y1);
+    this.ctx.lineTo(x2, y2);
+    this.ctx.lineTo(x3, y3);
+    this.ctx.closePath();
+    this.ctx.stroke();
+    this.ctx.save();
+    return T;
+  }
+
+  /**
    * Implementation of the Lisp `gstart-path` function. Begins a new path.
    * @return the symbol `t`
    */
