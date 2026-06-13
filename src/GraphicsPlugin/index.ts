@@ -165,6 +165,176 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   /**
+   * Implementation of the Lisp `gshadow-blur` function. Sets the shadow blur.
+   *
+   * Legacy: the original Graphist writes to `ctx.Blur` (capital B), not the
+   * standard `ctx.shadowBlur`. The mis-spelled assignment has no rendering
+   * effect. Preserved verbatim per the port-as-is policy.
+   * @param args the argument Cons (blur in pixels)
+   * @return the symbol `t`
+   */
+  gShadowBlur(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gshadow-blur');
+    const blur = this.requireNumberAt(args, 0, 'gshadow-blur');
+    (this.ctx as unknown as Record<string, number>)['Blur'] = blur;
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gshadow-color` function. Sets shadowColor.
+   * @param args the argument Cons (color spec — see parseColor)
+   * @return the symbol `t`
+   */
+  gShadowColor(args: Cons): LispValue {
+    this.requireOpen();
+    this.ctx.shadowColor = this.parseColor(args);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gshadow-offsetx` function.
+   * @param args the argument Cons (offset in pixels)
+   * @return the symbol `t`
+   */
+  gShadowOffsetX(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gshadow-offsetx');
+    this.ctx.shadowOffsetX = this.requireNumberAt(args, 0, 'gshadow-offsetx');
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gshadow-offsety` function.
+   * @param args the argument Cons (offset in pixels)
+   * @return the symbol `t`
+   */
+  gShadowOffsetY(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gshadow-offsety');
+    this.ctx.shadowOffsetY = this.requireNumberAt(args, 0, 'gshadow-offsety');
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gtext-font` function. Sets the canvas font.
+   * @param args the argument Cons (CSS font string)
+   * @return the symbol `t`
+   */
+  gTextFont(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gtext-font');
+    this.ctx.font = this.requireStringAt(args, 0, 'gtext-font');
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gtext-align` function. Sets textAlign.
+   * @param args the argument Cons (alignment string, e.g. `"left"`, `"center"`)
+   * @return the symbol `t`
+   */
+  gTextAlign(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gtext-align');
+    this.ctx.textAlign = this.requireStringAt(args, 0, 'gtext-align') as CanvasTextAlign;
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gtext-line` function. Sets textBaseline.
+   * @param args the argument Cons (baseline string, e.g. `"top"`, `"middle"`)
+   * @return the symbol `t`
+   */
+  gTextBaseline(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gtext-line');
+    this.ctx.textBaseline = this.requireStringAt(args, 0, 'gtext-line') as CanvasTextBaseline;
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gtext-dire` function. Sets the text direction
+   * via a numeric flag (0 → inherit, positive → rtl, negative → ltr).
+   * @param args the argument Cons (direction flag)
+   * @return the symbol `t`
+   */
+  gTextDirection(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gtext-dire');
+    const flag = this.requireNumberAt(args, 0, 'gtext-dire');
+    this.ctx.direction = this.textDirectionOf(flag);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Maps a numeric flag to the corresponding `direction` string.
+   * @param flag a number selecting the direction mode
+   * @return one of `"inherit"`, `"rtl"`, `"ltr"`
+   */
+  textDirectionOf(flag: number): CanvasDirection {
+    if (flag === 0) {
+      return 'inherit';
+    }
+    if (flag > 0) {
+      return 'rtl';
+    }
+    return 'ltr';
+  }
+
+  /**
+   * Implementation of the Lisp `gtranslate` function. Translates the origin.
+   * @param args the argument Cons (dx, dy)
+   * @return the symbol `t`
+   */
+  gTranslate(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 2, 'gtranslate');
+    const dx = this.requireNumberAt(args, 0, 'gtranslate');
+    const dy = this.requireNumberAt(args, 1, 'gtranslate');
+    this.ctx.translate(dx, dy);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gscale` function. Scales the coordinate system.
+   * @param args the argument Cons (sx, sy)
+   * @return the symbol `t`
+   */
+  gScale(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 2, 'gscale');
+    const sx = this.requireNumberAt(args, 0, 'gscale');
+    const sy = this.requireNumberAt(args, 1, 'gscale');
+    this.ctx.scale(sx, sy);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `grotate` function. Rotates the coordinate
+   * system by the given angle in degrees (converted to radians internally).
+   * @param args the argument Cons (angle in degrees)
+   * @return the symbol `t`
+   */
+  gRotate(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'grotate');
+    const deg = this.requireNumberAt(args, 0, 'grotate');
+    this.ctx.rotate((Math.PI / 180) * deg);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
    * Implementation of the Lisp `galpha` function. Sets the global alpha
    * (clamped to the range [0, 1]).
    * @param args the argument Cons (alpha)
