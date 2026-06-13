@@ -1,4 +1,7 @@
 galpha
+Graphist
+nullary
+quadratic
 garc
 gbezcurve
 gclear
