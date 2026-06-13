@@ -165,6 +165,155 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   /**
+   * Implementation of the Lisp `gstart-path` function. Begins a new path.
+   * @return the symbol `t`
+   */
+  gStartPath(): LispValue {
+    this.requireOpen();
+    this.ctx.beginPath();
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gfinish-path` function. Closes the current path.
+   * @return the symbol `t`
+   */
+  gFinishPath(): LispValue {
+    this.requireOpen();
+    this.ctx.closePath();
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gmove-to` function. Moves the path cursor.
+   * @param args the argument Cons (x, y)
+   * @return the symbol `t`
+   */
+  gMoveTo(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 2, 'gmove-to');
+    const x = this.requireNumberAt(args, 0, 'gmove-to');
+    const y = this.requireNumberAt(args, 1, 'gmove-to');
+    this.ctx.moveTo(x, y);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gline-to` function. Draws a straight line from
+   * the current path cursor to the given point.
+   * @param args the argument Cons (x, y)
+   * @return the symbol `t`
+   */
+  gLineTo(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 2, 'gline-to');
+    const x = this.requireNumberAt(args, 0, 'gline-to');
+    const y = this.requireNumberAt(args, 1, 'gline-to');
+    this.ctx.lineTo(x, y);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gquadcurve-to` function. Adds a quadratic
+   * Bezier curve to the path.
+   * @param args the argument Cons (cpx, cpy, x, y)
+   * @return the symbol `t`
+   */
+  gQuadCurveTo(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 4, 'gquadcurve-to');
+    const cpx = this.requireNumberAt(args, 0, 'gquadcurve-to');
+    const cpy = this.requireNumberAt(args, 1, 'gquadcurve-to');
+    const x = this.requireNumberAt(args, 2, 'gquadcurve-to');
+    const y = this.requireNumberAt(args, 3, 'gquadcurve-to');
+    this.ctx.quadraticCurveTo(cpx, cpy, x, y);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gbezcurve-to` function. Adds a cubic Bezier
+   * curve to the path.
+   * @param args the argument Cons (cp1x, cp1y, cp2x, cp2y, x, y)
+   * @return the symbol `t`
+   */
+  gBezCurveTo(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 6, 'gbezcurve-to');
+    const cp1x = this.requireNumberAt(args, 0, 'gbezcurve-to');
+    const cp1y = this.requireNumberAt(args, 1, 'gbezcurve-to');
+    const cp2x = this.requireNumberAt(args, 2, 'gbezcurve-to');
+    const cp2y = this.requireNumberAt(args, 3, 'gbezcurve-to');
+    const x = this.requireNumberAt(args, 4, 'gbezcurve-to');
+    const y = this.requireNumberAt(args, 5, 'gbezcurve-to');
+    this.ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `garc` function. Draws an arc.
+   * Angle arguments are degrees (converted to radians internally).
+   * The 6th argument selects direction: a non-negative value selects
+   * counter-clockwise (matching the legacy Graphist convention).
+   * @param args the argument Cons (x, y, radius, startDeg, endDeg, ccwFlag)
+   * @return the symbol `t`
+   */
+  gArc(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 6, 'garc');
+    const x = this.requireNumberAt(args, 0, 'garc');
+    const y = this.requireNumberAt(args, 1, 'garc');
+    const r = this.requireNumberAt(args, 2, 'garc');
+    const startDeg = this.requireNumberAt(args, 3, 'garc');
+    const endDeg = this.requireNumberAt(args, 4, 'garc');
+    const ccwFlag = this.requireNumberAt(args, 5, 'garc');
+    this.ctx.arc(x, y, r, (Math.PI / 180) * startDeg, (Math.PI / 180) * endDeg, ccwFlag >= 0);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `garc-to` function. Draws an arc connecting
+   * two tangent points.
+   * @param args the argument Cons (x1, y1, x2, y2, radius)
+   * @return the symbol `t`
+   */
+  gArcTo(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 5, 'garc-to');
+    const x1 = this.requireNumberAt(args, 0, 'garc-to');
+    const y1 = this.requireNumberAt(args, 1, 'garc-to');
+    const x2 = this.requireNumberAt(args, 2, 'garc-to');
+    const y2 = this.requireNumberAt(args, 3, 'garc-to');
+    const r = this.requireNumberAt(args, 4, 'garc-to');
+    this.ctx.arcTo(x1, y1, x2, y2, r);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `grect` function. Adds a rectangle subpath.
+   * @param args the argument Cons (x, y, width, height)
+   * @return the symbol `t`
+   */
+  gRect(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 4, 'grect');
+    const x = this.requireNumberAt(args, 0, 'grect');
+    const y = this.requireNumberAt(args, 1, 'grect');
+    const w = this.requireNumberAt(args, 2, 'grect');
+    const h = this.requireNumberAt(args, 3, 'grect');
+    this.ctx.rect(x, y, w, h);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
    * Throws if the canvas is not currently open. Most drawing methods call
    * this first to enforce `gopen`/`gclose` lifecycle.
    * @return void
