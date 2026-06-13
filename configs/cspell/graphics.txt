@@ -2,6 +2,8 @@ galpha
 Graphist
 nullary
 quadratic
+rgba
+subclassing
 garc
 gbezcurve
 gclear
