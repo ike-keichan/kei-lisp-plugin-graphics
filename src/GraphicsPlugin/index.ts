@@ -165,6 +165,208 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   /**
+   * Implementation of the Lisp `galpha` function. Sets the global alpha
+   * (clamped to the range [0, 1]).
+   * @param args the argument Cons (alpha)
+   * @return the symbol `t`
+   */
+  gAlpha(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'galpha');
+    const a = this.requireNumberAt(args, 0, 'galpha');
+    this.ctx.globalAlpha = Math.max(0, Math.min(1, a));
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gcolor` function. Sets both fillStyle and
+   * strokeStyle to the same color.
+   * @param args the argument Cons (color spec — see parseColor)
+   * @return the symbol `t`
+   */
+  gColor(args: Cons): LispValue {
+    this.requireOpen();
+    const color = this.parseColor(args);
+    this.ctx.fillStyle = color;
+    this.ctx.strokeStyle = color;
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gfill-color` function. Sets fillStyle.
+   * @param args the argument Cons (color spec)
+   * @return the symbol `t`
+   */
+  gFillColor(args: Cons): LispValue {
+    this.requireOpen();
+    this.ctx.fillStyle = this.parseColor(args);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gstroke-color` function. Sets strokeStyle.
+   * @param args the argument Cons (color spec)
+   * @return the symbol `t`
+   */
+  gStrokeColor(args: Cons): LispValue {
+    this.requireOpen();
+    this.ctx.strokeStyle = this.parseColor(args);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gline-cap` function. Maps a numeric arg to
+   * one of `butt` (0), `round` (positive), or `square` (negative).
+   * @param args the argument Cons (mode flag)
+   * @return the symbol `t`
+   */
+  gLineCap(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gline-cap');
+    const flag = this.requireNumberAt(args, 0, 'gline-cap');
+    this.ctx.lineCap = this.lineCapOf(flag);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gline-join` function. Maps a numeric arg to
+   * one of `miter` (0), `round` (positive), or `bevel` (negative).
+   * @param args the argument Cons (mode flag)
+   * @return the symbol `t`
+   */
+  gLineJoin(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gline-join');
+    const flag = this.requireNumberAt(args, 0, 'gline-join');
+    this.ctx.lineJoin = this.lineJoinOf(flag);
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gline-width` function. Sets the line width
+   * (values ≤ 0 are coerced to 1, preserving legacy clamping).
+   * @param args the argument Cons (width)
+   * @return the symbol `t`
+   */
+  gLineWidth(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 1, 'gline-width');
+    const w = this.requireNumberAt(args, 0, 'gline-width');
+    this.ctx.lineWidth = w <= 0 ? 1 : w;
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gpattern` function. Loads an image from the
+   * given URL asynchronously; once loaded, installs it as fillStyle in the
+   * requested repeat mode (0 → repeat, positive → repeat-x, negative →
+   * repeat-y). Returns immediately, before the image finishes loading
+   * (preserved verbatim from legacy Graphist).
+   * @param args the argument Cons (imageSrc, modeFlag)
+   * @return the symbol `t`
+   */
+  gPattern(args: Cons): LispValue {
+    this.requireOpen();
+    this.requireArity(args, 2, 'gpattern');
+    const src = this.requireStringAt(args, 0, 'gpattern');
+    const flag = this.requireNumberAt(args, 1, 'gpattern');
+    const mode = this.patternModeOf(flag);
+    const image = new Image();
+    image.src = src;
+    image.addEventListener('load', () => {
+      const pattern = this.ctx.createPattern(image, mode);
+      if (pattern !== null) {
+        this.ctx.fillStyle = pattern;
+      }
+    });
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Maps a numeric flag to the corresponding `lineCap` string.
+   * @param flag a number selecting the cap style
+   * @return one of `"butt"`, `"round"`, `"square"`
+   */
+  lineCapOf(flag: number): CanvasLineCap {
+    if (flag === 0) {
+      return 'butt';
+    }
+    if (flag > 0) {
+      return 'round';
+    }
+    return 'square';
+  }
+
+  /**
+   * Maps a numeric flag to the corresponding `lineJoin` string.
+   * @param flag a number selecting the join style
+   * @return one of `"miter"`, `"round"`, `"bevel"`
+   */
+  lineJoinOf(flag: number): CanvasLineJoin {
+    if (flag === 0) {
+      return 'miter';
+    }
+    if (flag > 0) {
+      return 'round';
+    }
+    return 'bevel';
+  }
+
+  /**
+   * Maps a numeric flag to the corresponding pattern repeat mode string.
+   * @param flag a number selecting the repeat mode
+   * @return one of `"repeat"`, `"repeat-x"`, `"repeat-y"`
+   */
+  patternModeOf(flag: number): 'repeat' | 'repeat-x' | 'repeat-y' {
+    if (flag === 0) {
+      return 'repeat';
+    }
+    if (flag > 0) {
+      return 'repeat-x';
+    }
+    return 'repeat-y';
+  }
+
+  /**
+   * Parses a color spec from the head of the argument Cons. Accepts one of
+   * three forms (matching legacy Graphist):
+   *   - 1 string: used verbatim (e.g. `"red"`, `"#fff"`)
+   *   - 3 numbers: formatted as `rgb(r, g, b)`
+   *   - 4 numbers: formatted as `rgba(r, g, b, a)`
+   * Any other shape yields the fallback color `"black"`.
+   * @param args the argument Cons
+   * @return the CSS color string
+   */
+  parseColor(args: Cons): string {
+    const n = args.length();
+    if (n === 1 && Cons.isString(args.car)) {
+      return args.car;
+    }
+    if (n === 3) {
+      const r = this.requireNumberAt(args, 0, 'gcolor');
+      const g = this.requireNumberAt(args, 1, 'gcolor');
+      const b = this.requireNumberAt(args, 2, 'gcolor');
+      return `rgb(${String(r)}, ${String(g)}, ${String(b)})`;
+    }
+    if (n === 4) {
+      const r = this.requireNumberAt(args, 0, 'gcolor');
+      const g = this.requireNumberAt(args, 1, 'gcolor');
+      const b = this.requireNumberAt(args, 2, 'gcolor');
+      const a = this.requireNumberAt(args, 3, 'gcolor');
+      return `rgba(${String(r)}, ${String(g)}, ${String(b)}, ${String(a)})`;
+    }
+    return 'black';
+  }
+
+  /**
    * Implementation of the Lisp `gfill` function. Fills the current path.
    * @return the symbol `t`
    */
