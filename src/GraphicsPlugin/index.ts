@@ -165,6 +165,87 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   /**
+   * Implementation of the Lisp `gimage` function. Loads an image from the
+   * given URL asynchronously, then draws it at the requested position.
+   * Supports 3-arg `(src x y)` and 5-arg `(src x y w h)` forms. Returns
+   * immediately, before the image finishes loading (preserved verbatim).
+   * @param args the argument Cons
+   * @return the symbol `t`
+   */
+  gImage(args: Cons): LispValue {
+    this.requireOpen();
+    const n = args.length();
+    if (n !== 3 && n !== 5) {
+      throw new EvalError(`Can not apply "gimage" with ${String(n)} arguments`);
+    }
+    const src = this.requireStringAt(args, 0, 'gimage');
+    const x = this.requireNumberAt(args, 1, 'gimage');
+    const y = this.requireNumberAt(args, 2, 'gimage');
+    const image = new Image();
+    image.src = src;
+    if (n === 3) {
+      image.addEventListener('load', () => {
+        this.ctx.drawImage(image, x, y);
+      });
+    } else {
+      const w = this.requireNumberAt(args, 3, 'gimage');
+      const h = this.requireNumberAt(args, 4, 'gimage');
+      image.addEventListener('load', () => {
+        this.ctx.drawImage(image, x, y, w, h);
+      });
+    }
+    this.ctx.save();
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gsave-png` function. Exports the current
+   * canvas as a PNG and triggers a download. Requires a browser DOM
+   * (`document` and an attachable `<a download>` element); throws otherwise.
+   * @return the symbol `t`
+   */
+  gSavePng(): LispValue {
+    this.requireOpen();
+    this.downloadCanvas('image/png');
+    return T;
+  }
+
+  /**
+   * Implementation of the Lisp `gsave-jpeg` function. Exports the current
+   * canvas as a JPEG and triggers a download. Requires a browser DOM.
+   * @return the symbol `t`
+   */
+  gSaveJpeg(): LispValue {
+    this.requireOpen();
+    this.downloadCanvas('image/jpeg');
+    return T;
+  }
+
+  /**
+   * Encodes the canvas as the given MIME type and triggers a browser
+   * download via an `<a download>` link click. Throws if the runtime does
+   * not expose `document` or the canvas does not expose `toDataURL`
+   * (OffscreenCanvas in workers, Node, etc.).
+   * @param mimeType the export MIME type (e.g. `"image/png"`)
+   * @return void
+   */
+  downloadCanvas(mimeType: string): void {
+    if (typeof document === 'undefined') {
+      throw new EvalError('Can not save: document is not available in this environment.');
+    }
+    const surface = this.canvas as HTMLCanvasElement;
+    if (typeof surface.toDataURL !== 'function') {
+      throw new EvalError('Can not save: canvas does not support toDataURL.');
+    }
+    const link = document.createElement('a');
+    link.href = surface.toDataURL(mimeType);
+    link.download = 'canvas';
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }
+
+  /**
    * Implementation of the Lisp `gshadow-blur` function. Sets the shadow blur.
    *
    * Legacy: the original Graphist writes to `ctx.Blur` (capital B), not the
