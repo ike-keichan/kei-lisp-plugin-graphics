@@ -11,9 +11,10 @@ import { Cons, InterpretedSymbol } from 'kei-lisp';
 
 /**
  * @class
- * @classdesc Canvas2D drawing plugin for the kei-lisp interpreter. Ported
- *            from the legacy `Graphist.js` (kei-lisp-web/attic) and adapted
- *            to the `KeiLispPlugin` contract (`name` / `has` / `apply`).
+ * @classdesc Canvas2D drawing plugin for the kei-lisp interpreter. Implements
+ *            the `KeiLispPlugin` contract (`name` / `has` / `apply`) and
+ *            exposes 43 `g…` Lisp functions that proxy to a 2D rendering
+ *            context.
  * @author Keisuke Ikeda
  * @this {GraphicsPlugin}
  */
