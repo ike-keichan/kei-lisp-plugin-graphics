@@ -40,7 +40,6 @@ export class GraphicsPlugin extends Object {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.isOpen = false;
-    this._pluginContext = null;
   }
 
   /**
@@ -53,21 +52,13 @@ export class GraphicsPlugin extends Object {
   }
 
   /**
-   * Dispatches the given symbol to the matching `g…` method. The plugin
-   * context is stashed for the duration of the call so that downstream helpers
-   * (`_print`) can reach the stream manager without an extra parameter.
+   * Dispatches the given symbol to the matching `g…` method.
    * @param {InterpretedSymbol} aSymbol - the call symbol
    * @param {Cons} args - the evaluated argument list
-   * @param {object} ctx - the plugin context provided by the interpreter
    * @return {*} the method's result, or `Cons.nil` if dispatch fails
    */
-  apply(aSymbol, args, ctx) {
-    this._pluginContext = ctx;
-    try {
-      return this.selectProcedure(aSymbol, args);
-    } finally {
-      this._pluginContext = null;
-    }
+  apply(aSymbol, args) {
+    return this.selectProcedure(aSymbol, args);
   }
 
   /**
@@ -86,6 +77,10 @@ export class GraphicsPlugin extends Object {
 
   /**
    * Looks up and invokes the JS method that implements the given Lisp symbol.
+   * Throws `TypeError` when the dispatch table points to a method that does
+   * not exist on the instance — this matches the legacy behavior, where the
+   * Ramda `R.invoker(1, methodName)(args, this)` call would surface the same
+   * error by attempting to call `undefined`.
    * @param {InterpretedSymbol} procedure - the Lisp symbol
    * @param {Cons} args - the evaluated argument list
    * @return {*} the method's result
@@ -94,8 +89,9 @@ export class GraphicsPlugin extends Object {
     const methodName = GraphicsPlugin.buildInFunctions.get(procedure);
     const method = this[methodName];
     if (typeof method !== 'function') {
-      this._print('Not Found Method: ' + String(methodName));
-      return Cons.nil;
+      throw new TypeError(
+        `${this.constructor.name} does not have a method named "${String(methodName)}"`,
+      );
     }
     return method.call(this, args);
   }
@@ -113,19 +109,17 @@ export class GraphicsPlugin extends Object {
   }
 
   /**
-   * Writes a diagnostic line to the stashed plugin context's stream, if any.
-   * Used in place of the legacy `selectPrintFunction()` global utility.
+   * Writes a diagnostic line directly to `process.stderr`, matching the
+   * convention used by kei-lisp itself (`Applier.format` writes to
+   * `process.stdout`). In a Node runtime this hits the real stderr; in a
+   * browser kei-lisp host (e.g. kei-lisp-web) the host typically swaps
+   * `process.stderr.write` for a sink that routes to the REPL output panel,
+   * so the same call reaches the user via the host's normal output channel.
    * @param {string} line - the line to write
    * @return {void}
    */
   _print(line) {
-    if (this._pluginContext === null) {
-      return;
-    }
-    const stream = this._pluginContext.streamManager.getStream();
-    if (stream !== null) {
-      stream.write(line + '\n');
-    }
+    process.stderr.write(line + '\n');
   }
 
   /**

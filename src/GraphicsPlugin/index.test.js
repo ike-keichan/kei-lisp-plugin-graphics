@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Cons, InterpretedSymbol, LispInterpreter, StreamManager } from 'kei-lisp';
+import { Cons, InterpretedSymbol, LispInterpreter } from 'kei-lisp';
 
 import { GraphicsPlugin } from './index.js';
 
@@ -82,14 +82,17 @@ function args(...values) {
 }
 
 /**
- * Builds a PluginContext for tests that need ctx.streamManager.
+ * Builds a minimal PluginContext for tests that pass one to `apply`.
+ * The current GraphicsPlugin no longer reads the context, so the shape
+ * only has to type-check; a single `{}` would do, but we keep a small
+ * eval-capable stub so that tests exercising the host interpreter's
+ * dispatch path do not collapse the context out from under it.
  * @return {object} the context
  */
 function makeCtx() {
   const interpreter = new LispInterpreter();
   return {
     environment: interpreter.root,
-    streamManager: new StreamManager(),
     depth: 1,
     eval: (form) => interpreter.eval(form),
   };
@@ -136,6 +139,33 @@ describe('GraphicsPlugin', () => {
       const { plugin } = makePlugin();
       const result = plugin.apply(InterpretedSymbol.of('unknown-fn'), Cons.nil, makeCtx());
       expect(result).toBe(Cons.nil);
+    });
+  });
+
+  describe('buildInFunction', () => {
+    it('throws TypeError when the dispatch table points to a missing method', () => {
+      const { plugin } = makePlugin();
+      // Temporarily inject a symbol that maps to a non-existent method name.
+      const orphan = InterpretedSymbol.of('test-orphan');
+      GraphicsPlugin.buildInFunctions.set(orphan, 'methodDoesNotExist');
+      try {
+        expect(() => plugin.buildInFunction(orphan, Cons.nil)).toThrow(TypeError);
+      } finally {
+        GraphicsPlugin.buildInFunctions.delete(orphan);
+      }
+    });
+  });
+
+  describe('_print', () => {
+    it('writes the line plus a newline to process.stderr', () => {
+      const { plugin } = makePlugin();
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        plugin._print('hello');
+        expect(spy).toHaveBeenCalledWith('hello\n');
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 
