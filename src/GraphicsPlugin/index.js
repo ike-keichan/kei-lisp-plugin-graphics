@@ -3,21 +3,17 @@
                   sonarjs/no-nested-conditional,
                   sonarjs/no-duplicate-string */
 
-// Phase 1 port of the legacy Graphist.js. These lint rules are disabled to
-// keep the diff against the original minimal; they will be re-enabled (and
-// the offending patterns refactored) in the bug-fix follow-up.
+// These lint rules are disabled file-wide so the ported handlers can preserve
+// the legacy Graphist patterns (Image#onload, clamp ternaries, mode-flag
+// ternaries, repeated diagnostic strings) without per-line escape hatches.
 
 import { Cons, InterpretedSymbol } from 'kei-lisp';
 
 /**
  * @class
  * @classdesc Canvas2D drawing plugin for the kei-lisp interpreter. Ported
- *            verbatim from the legacy `Graphist.js` (kei-lisp-web/attic) and
- *            adapted to the `KeiLispPlugin` contract (`name` / `has` / `apply`).
- *            Legacy behavior — including known quirks such as the
- *            `gshadow-blur` typo and the redundant `ctx.save()` after every
- *            draw call — is preserved verbatim and will be addressed in a
- *            follow-up release.
+ *            from the legacy `Graphist.js` (kei-lisp-web/attic) and adapted
+ *            to the `KeiLispPlugin` contract (`name` / `has` / `apply`).
  * @author Keisuke Ikeda
  * @this {GraphicsPlugin}
  */
