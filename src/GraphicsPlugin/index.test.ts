@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { type MockInstance, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Cons, EvalError, InterpretedSymbol, LispInterpreter, StreamManager } from 'kei-lisp';
 import type { PluginContext } from 'kei-lisp';
@@ -56,9 +56,7 @@ function makePlugin(): { canvas: HTMLCanvasElement; plugin: GraphicsPlugin } {
   const canvas = document.createElement('canvas');
   canvas.width = 800;
   canvas.height = 600;
-  vi.spyOn(canvas, 'getContext').mockReturnValue(
-    makeFakeCtx() as unknown as ReturnType<HTMLCanvasElement['getContext']>,
-  );
+  vi.spyOn(canvas, 'getContext').mockReturnValue(makeFakeCtx());
   const plugin = new GraphicsPlugin(canvas);
   return { canvas, plugin };
 }
@@ -528,15 +526,13 @@ describe('GraphicsPlugin', () => {
   describe('end-to-end via LispInterpreter', () => {
     let interpreter: LispInterpreter;
     let plugin: GraphicsPlugin;
-    let fillRect: ReturnType<typeof vi.spyOn>;
+    let fillRect: MockInstance<CanvasRenderingContext2D['fillRect']>;
 
     beforeEach(() => {
       const canvas = document.createElement('canvas');
       canvas.width = 200;
       canvas.height = 100;
-      vi.spyOn(canvas, 'getContext').mockReturnValue(
-        makeFakeCtx() as unknown as ReturnType<HTMLCanvasElement['getContext']>,
-      );
+      vi.spyOn(canvas, 'getContext').mockReturnValue(makeFakeCtx());
       plugin = new GraphicsPlugin(canvas);
       fillRect = vi.spyOn(plugin.ctx, 'fillRect');
       interpreter = new LispInterpreter();
