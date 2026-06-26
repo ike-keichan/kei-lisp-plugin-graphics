@@ -734,6 +734,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
       try {
         const anImage = new Image();
         anImage.crossOrigin = 'Anonymous';
+        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
         anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/jpeg');
         const link = document.createElement('a');
         link.href = anImage.src;
@@ -759,6 +760,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
       try {
         const anImage = new Image();
         anImage.crossOrigin = 'Anonymous';
+        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
         anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/png');
         const link = document.createElement('a');
         link.href = anImage.src;
@@ -988,6 +990,8 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
             return InterpretedSymbol.of('t');
           }
         }
+        // Legacy typo: message says 'fill text' but this method strokes. Preserved from the
+        // original Graphist.js.
         this._print('Can not draw fill text.');
         return Cons.nil;
       } catch {

@@ -370,6 +370,13 @@ describe('GraphicsPlugin', () => {
       expect((plugin.ctx as CanvasRenderingContext2D).globalAlpha).toBe(0);
     });
 
+    it('passes through mid-range values unchanged', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('galpha'), args(0.5), makeCtx());
+      expect((plugin.ctx as CanvasRenderingContext2D).globalAlpha).toBe(0.5);
+    });
+
     it('clamps values above one to one', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
@@ -392,6 +399,13 @@ describe('GraphicsPlugin', () => {
       plugin.apply(InterpretedSymbol.of('gline-cap'), args(1), makeCtx());
       expect((plugin.ctx as CanvasRenderingContext2D).lineCap).toBe('round');
     });
+
+    it('maps a negative flag to "square"', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gline-cap'), args(-1), makeCtx());
+      expect((plugin.ctx as CanvasRenderingContext2D).lineCap).toBe('square');
+    });
   });
 
   describe('gShadowBlur', () => {
@@ -400,6 +414,28 @@ describe('GraphicsPlugin', () => {
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
       plugin.apply(InterpretedSymbol.of('gshadow-blur'), args(8), makeCtx());
       expect((plugin.ctx as unknown as { Blur: number }).Blur).toBe(8);
+    });
+  });
+
+  describe('gStrokeText', () => {
+    it('calls ctx.strokeText with the correct arguments', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'strokeText');
+      plugin.apply(InterpretedSymbol.of('gstroke-text'), args('hello', 10, 20), makeCtx());
+      expect(spy).toHaveBeenCalledWith('hello', 10, 20);
+    });
+
+    it('preserves the legacy typo by emitting "Can not draw fill text." on failure', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        plugin.apply(InterpretedSymbol.of('gstroke-text'), args(10, 20), makeCtx());
+        expect(spy).toHaveBeenCalledWith('Can not draw fill text.\n');
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 
