@@ -4,23 +4,16 @@ import { FILES, RULE_LEVEL } from '../const/index.mjs';
 const { SRC, TEST } = FILES;
 const { ERROR, WARN, OFF } = RULE_LEVEL;
 
-// strictTypeChecked rules only apply to TypeScript sources. JavaScript files
-// (used as a transitional medium while the legacy Graphist port is being
-// migrated to TypeScript) keep the lighter sonarjs/unicorn rule set.
-const TS_ONLY = SRC.concat(TEST)
-  .map((g) => g.replace('{js,ts}', 'ts'))
-  .filter((g) => g.endsWith('.ts'));
-
 /**
  * ESLint config for typescript-eslint.
  */
 export const typescriptConfigs = [
   ...tseslint.configs.strictTypeChecked.map((config) => ({
     ...config,
-    files: TS_ONLY,
+    files: SRC.concat(TEST),
   })),
   {
-    files: TS_ONLY,
+    files: SRC.concat(TEST),
     languageOptions: {
       parserOptions: {
         projectService: true,
@@ -43,11 +36,16 @@ export const typescriptConfigs = [
       // NOTE: Lisp の linked list 走査で `let aCons = this; while (...) { aCons = aCons.cdr }` パターンが必然的に発生するため無効化
       // this のエイリアスを禁止
       '@typescript-eslint/no-this-alias': OFF,
+      // NOTE: テンプレートリテラル内での number の使用を許可（rgb/rgba カラー文字列の組み立て等）
+      '@typescript-eslint/restrict-template-expressions': [ERROR, { allowNumber: true }],
+      // NOTE: eslint-plugin-unused-imports の no-unused-vars（_プレフィックスで抑制可能）に委譲するため無効化
+      // strictTypeChecked がこのルールを有効化するため、unusedImportsConfigs の OFF 設定が上書きされないよう再度 OFF にする
+      '@typescript-eslint/no-unused-vars': OFF,
     },
   },
   {
     // テストコードではモック等で any を使いやすくするため警告に緩和
-    files: TS_ONLY.filter((g) => g.includes('.test.')),
+    files: TEST,
     rules: {
       '@typescript-eslint/no-explicit-any': WARN,
     },
