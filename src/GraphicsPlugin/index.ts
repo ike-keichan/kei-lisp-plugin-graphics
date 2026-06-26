@@ -842,6 +842,8 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     return Cons.nil;
   }
 
+  // NOTE: gShadowOffsetX, gShadowOffsetY, and gShadowBlur intentionally omit try/catch.
+  // The original Graphist.js had the same structure for all three shadow-property setters.
   gShadowOffsetX(args: Cons): LispValue {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {

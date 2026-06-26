@@ -225,6 +225,17 @@ describe('GraphicsPlugin', () => {
       const second = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
       expect(second).toBe(Cons.nil);
     });
+
+    it('prints the hardcoded legacy size message regardless of actual canvas dimensions', () => {
+      const { plugin } = makePlugin();
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+        expect(spy).toHaveBeenCalledWith('canvas size, width : 600 height : 300\n');
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   describe('gClose', () => {
