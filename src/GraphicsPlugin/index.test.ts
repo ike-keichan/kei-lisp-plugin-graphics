@@ -320,6 +320,7 @@ describe('GraphicsPlugin', () => {
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
       plugin.apply(InterpretedSymbol.of('gcolor'), args('red'), makeCtx());
       expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('red');
+      expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('red');
     });
 
     it('accepts a 3-number RGB tuple', () => {
@@ -327,6 +328,7 @@ describe('GraphicsPlugin', () => {
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
       plugin.apply(InterpretedSymbol.of('gcolor'), args(10, 20, 30), makeCtx());
       expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('rgb(10, 20, 30)');
+      expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('rgb(10, 20, 30)');
     });
 
     it('accepts a 4-number RGBA tuple', () => {
@@ -334,6 +336,29 @@ describe('GraphicsPlugin', () => {
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
       plugin.apply(InterpretedSymbol.of('gcolor'), args(10, 20, 30, 0.5), makeCtx());
       expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('rgba(10, 20, 30, 0.5)');
+      expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('rgba(10, 20, 30, 0.5)');
+    });
+  });
+
+  describe('gFillColor', () => {
+    it('sets fillStyle but leaves strokeStyle unchanged', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      (plugin.ctx as CanvasRenderingContext2D).strokeStyle = 'initial';
+      plugin.apply(InterpretedSymbol.of('gfill-color'), args('blue'), makeCtx());
+      expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('blue');
+      expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('initial');
+    });
+  });
+
+  describe('gStrokeColor', () => {
+    it('sets strokeStyle but leaves fillStyle unchanged', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      (plugin.ctx as CanvasRenderingContext2D).fillStyle = 'initial';
+      plugin.apply(InterpretedSymbol.of('gstroke-color'), args('green'), makeCtx());
+      expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('green');
+      expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('initial');
     });
   });
 
@@ -402,6 +427,66 @@ describe('GraphicsPlugin', () => {
     it('formats a 4-number tuple as rgba(...)', () => {
       const { plugin } = makePlugin();
       expect(plugin.selectColor(args(1, 2, 3, 0.5))).toBe('rgba(1, 2, 3, 0.5)');
+    });
+
+    it('returns "black" for zero arguments', () => {
+      const { plugin } = makePlugin();
+      expect(plugin.selectColor(Cons.nil)).toBe('black');
+    });
+
+    it('returns "black" for unrecognized arity (2 args)', () => {
+      const { plugin } = makePlugin();
+      expect(plugin.selectColor(args(1, 2))).toBe('black');
+    });
+
+    it('returns "black" when a 3-element tuple contains a non-number', () => {
+      const { plugin } = makePlugin();
+      expect(plugin.selectColor(args(1, 'two', 3))).toBe('black');
+    });
+  });
+
+  describe('gImage', () => {
+    it('returns t for a valid 3-arg call', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const result = plugin.apply(
+        InterpretedSymbol.of('gimage'),
+        args('http://example.test/img.png', 10, 20),
+        makeCtx(),
+      );
+      expect(result).toBe(InterpretedSymbol.of('t'));
+    });
+
+    it('returns t for a valid 5-arg call', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const result = plugin.apply(
+        InterpretedSymbol.of('gimage'),
+        args('http://example.test/img.png', 10, 20, 100, 80),
+        makeCtx(),
+      );
+      expect(result).toBe(InterpretedSymbol.of('t'));
+    });
+
+    it('returns nil for wrong arity', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const result = plugin.apply(
+        InterpretedSymbol.of('gimage'),
+        args('http://example.test/img.png', 10),
+        makeCtx(),
+      );
+      expect(result).toBe(Cons.nil);
+    });
+  });
+
+  describe('checkSupport', () => {
+    it('returns nil from any g* method when ctx is null', () => {
+      const canvas = document.createElement('canvas');
+      vi.spyOn(canvas, 'getContext').mockReturnValue(null);
+      const plugin = new GraphicsPlugin(canvas);
+      const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      expect(result).toBe(Cons.nil);
     });
   });
 

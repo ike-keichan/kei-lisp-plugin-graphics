@@ -749,7 +749,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         return Cons.nil;
       }
     }
-    this._print('The canvas has already been opened.');
+    this._print('The canvas is closed and cannot be executed.');
     return Cons.nil;
   }
 
@@ -774,7 +774,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         return Cons.nil;
       }
     }
-    this._print('The canvas has already been opened.');
+    this._print('The canvas is closed and cannot be executed.');
     return Cons.nil;
   }
 
@@ -886,7 +886,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
       this._print('Can not sleep');
       return Cons.nil;
     }
-    this._print('The canvas has already been opened.');
+    this._print('The canvas is closed and cannot be executed.');
     return Cons.nil;
   }
 
