@@ -96,9 +96,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     const target = this as unknown as Record<string, unknown>;
     const method = target[methodName];
     if (typeof method !== 'function') {
-      throw new TypeError(
-        `${this.constructor.name} does not have a method named "${methodName}"`,
-      );
+      throw new TypeError(`${this.constructor.name} does not have a method named "${methodName}"`);
     }
     return (method as (args: Cons) => LispValue).call(this, args);
   }
@@ -177,14 +175,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
             Cons.isNumber(a5)
           ) {
             const aFlag = a5 >= 0;
-            this.ctx.arc(
-              a0,
-              a1,
-              a2,
-              (Math.PI / 180) * a3,
-              (Math.PI / 180) * a4,
-              aFlag,
-            );
+            this.ctx.arc(a0, a1, a2, (Math.PI / 180) * a3, (Math.PI / 180) * a4, aFlag);
             this.ctx.save();
             return InterpretedSymbol.of('t');
           }
@@ -747,7 +738,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         const link = document.createElement('a');
         link.href = anImage.src;
         link.download = 'canvas';
-        (document.body).append(link);
+        document.body.append(link);
         link.click();
         link.remove();
         return InterpretedSymbol.of('t');
@@ -772,7 +763,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         const link = document.createElement('a');
         link.href = anImage.src;
         link.download = 'canvas';
-        (document.body).append(link);
+        document.body.append(link);
         link.click();
         link.remove();
         return InterpretedSymbol.of('t');
