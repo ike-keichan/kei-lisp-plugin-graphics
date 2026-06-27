@@ -806,6 +806,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     return Cons.nil;
   }
 
+  // NOTE: intentionally omits try/catch — same structure as gShadowOffsetX and gShadowOffsetY.
   gShadowBlur(args: Cons): LispValue {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {

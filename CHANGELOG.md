@@ -13,3 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   class ported from the legacy `Graphist.js`. Registers 43 `g…`
   Canvas2D drawing primitives callable from Lisp via the kei-lisp v2.2
   plugin contract (`name` / `has` / `apply`).
+- Full TypeScript source with strict type checking — `any` and `!`
+  assertions removed from production code.
+
+### Fixed
+
+- `gSaveJpeg`, `gSavePng`, and `gSleep` now emit
+  `'The canvas is closed and cannot be executed.'` when called while the
+  canvas is not open. The JavaScript source emitted the wrong message
+  (`'The canvas has already been opened.'`) due to a copy-paste from
+  `gOpen`'s double-open guard.
+- `_print` no longer throws `ReferenceError` in browser or Worker
+  contexts where `process` is not defined; it falls back to
+  `console.error`.
