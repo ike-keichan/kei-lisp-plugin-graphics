@@ -36,6 +36,11 @@ export const typescriptConfigs = [
       // NOTE: Lisp の linked list 走査で `let aCons = this; while (...) { aCons = aCons.cdr }` パターンが必然的に発生するため無効化
       // this のエイリアスを禁止
       '@typescript-eslint/no-this-alias': OFF,
+      // NOTE: テンプレートリテラル内での number の使用を許可（rgb/rgba カラー文字列の組み立て等）
+      '@typescript-eslint/restrict-template-expressions': [ERROR, { allowNumber: true }],
+      // NOTE: eslint-plugin-unused-imports の no-unused-vars（_プレフィックスで抑制可能）に委譲するため無効化
+      // strictTypeChecked がこのルールを有効化するため、unusedImportsConfigs の OFF 設定が上書きされないよう再度 OFF にする
+      '@typescript-eslint/no-unused-vars': OFF,
     },
   },
   {

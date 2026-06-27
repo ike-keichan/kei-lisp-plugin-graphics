@@ -1,1 +1,16 @@
-export const version = '0.1.0';
+import { GraphicsPlugin } from './GraphicsPlugin/index.js';
+
+/**
+ * Creates a Canvas2D drawing plugin bound to the given canvas. Register it on
+ * a `LispInterpreter` via `interpreter.use(plugin)` to make the `g…` drawing
+ * primitives callable from Lisp source.
+ * @param options - the canvas to draw to
+ * @return a KeiLispPlugin that handles the `g…` symbols
+ */
+export function createGraphicsPlugin(options: {
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+}): GraphicsPlugin {
+  return new GraphicsPlugin(options.canvas);
+}
+
+export { GraphicsPlugin } from './GraphicsPlugin/index.js';
