@@ -7,6 +7,7 @@
 // the legacy Graphist patterns (Image#onload, clamp ternaries, mode-flag
 // ternaries, repeated diagnostic strings) without per-line escape hatches.
 
+import type { KeiLispPlugin, LispValue, PluginContext } from 'kei-lisp';
 import { Cons, InterpretedSymbol } from 'kei-lisp';
 
 /**
@@ -18,24 +19,28 @@ import { Cons, InterpretedSymbol } from 'kei-lisp';
  * @author Keisuke Ikeda
  * @this {GraphicsPlugin}
  */
-export class GraphicsPlugin extends Object {
+export class GraphicsPlugin extends Object implements KeiLispPlugin {
   /**
    * Dispatch map from a Lisp function name (InterpretedSymbol) to the name of
    * the GraphicsPlugin method that implements it.
    */
-  static buildInFunctions = GraphicsPlugin.setup();
+  static readonly buildInFunctions: Map<InterpretedSymbol, string> = GraphicsPlugin.setup();
 
   /**
    * Plugin identifier, used for diagnostics.
    */
-  name = 'graphics';
+  readonly name: string = 'graphics';
+
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  isOpen: boolean;
 
   /**
    * Constructor.
    * @constructor
-   * @param {HTMLCanvasElement | OffscreenCanvas} canvas - the canvas to draw to
+   * @param canvas - the canvas to draw to
    */
-  constructor(canvas) {
+  constructor(canvas: HTMLCanvasElement | OffscreenCanvas) {
     super();
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
@@ -44,34 +49,35 @@ export class GraphicsPlugin extends Object {
 
   /**
    * Returns true if this plugin handles the given symbol.
-   * @param {InterpretedSymbol} aSymbol - the call symbol
-   * @return {boolean} true if `apply` should be called
+   * @param aSymbol - the call symbol
+   * @return true if `apply` should be called
    */
-  has(aSymbol) {
+  has(aSymbol: InterpretedSymbol): boolean {
     return GraphicsPlugin.buildInFunctions.has(aSymbol);
   }
 
   /**
    * Dispatches the given symbol to the matching `g…` method.
-   * @param {InterpretedSymbol} aSymbol - the call symbol
-   * @param {Cons} args - the evaluated argument list
-   * @return {*} the method's result, or `Cons.nil` if dispatch fails
+   * @param aSymbol - the call symbol
+   * @param args - the evaluated argument list
+   * @param _ctx - the interpreter context (unused by this plugin)
+   * @return the method's result, or `Cons.nil` if dispatch fails
    */
-  apply(aSymbol, args) {
+  apply(aSymbol: InterpretedSymbol, args: Cons, _ctx: PluginContext): LispValue {
     return this.selectProcedure(aSymbol, args);
   }
 
   /**
    * Resolves the procedure name and invokes the matching method.
-   * @param {InterpretedSymbol} procedure - the Lisp symbol
-   * @param {Cons} args - the evaluated argument list
-   * @return {*} the method's result, or `Cons.nil` if not registered
+   * @param procedure - the Lisp symbol
+   * @param args - the evaluated argument list
+   * @return the method's result, or `Cons.nil` if not registered
    */
-  selectProcedure(procedure, args) {
+  selectProcedure(procedure: InterpretedSymbol, args: Cons): LispValue {
     if (GraphicsPlugin.buildInFunctions.has(procedure)) {
       return this.buildInFunction(procedure, args);
     }
-    this._print('I could find no procedure description for ' + String(procedure));
+    this._print(`I could find no procedure description for ${String(procedure)}`);
     return Cons.nil;
   }
 
@@ -81,26 +87,28 @@ export class GraphicsPlugin extends Object {
    * not exist on the instance — this matches the legacy behavior, where the
    * Ramda `R.invoker(1, methodName)(args, this)` call would surface the same
    * error by attempting to call `undefined`.
-   * @param {InterpretedSymbol} procedure - the Lisp symbol
-   * @param {Cons} args - the evaluated argument list
-   * @return {*} the method's result
+   * @param procedure - the Lisp symbol
+   * @param args - the evaluated argument list
+   * @return the method's result
    */
-  buildInFunction(procedure, args) {
-    const methodName = GraphicsPlugin.buildInFunctions.get(procedure);
-    const method = this[methodName];
+  buildInFunction(procedure: InterpretedSymbol, args: Cons): LispValue {
+    const methodName = GraphicsPlugin.buildInFunctions.get(procedure) as string;
+    const target = this as unknown as Record<string, unknown>;
+    const method = target[methodName];
     if (typeof method !== 'function') {
-      throw new TypeError(
-        `${this.constructor.name} does not have a method named "${String(methodName)}"`,
-      );
+      throw new TypeError(`${this.constructor.name} does not have a method named "${methodName}"`);
     }
-    return method.call(this, args);
+    return (method as (args: Cons) => LispValue).call(this, args);
   }
 
   /**
-   * Checks whether the canvas exposes a usable 2D context.
-   * @return {boolean} whether the context is available
+   * Checks whether the canvas exposes a usable 2D context, and narrows
+   * `this.ctx` to non-null for the caller when it returns true.
+   * @return type predicate — true when ctx is non-null
    */
-  checkSupport() {
+  checkSupport(): this is GraphicsPlugin & {
+    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+  } {
     if (this.ctx === null) {
       this._print('Unable to initialize canvas. The browser or machine may not support it.');
       return false;
@@ -115,22 +123,15 @@ export class GraphicsPlugin extends Object {
    * browser kei-lisp host (e.g. kei-lisp-web) the host typically swaps
    * `process.stderr.write` for a sink that routes to the REPL output panel,
    * so the same call reaches the user via the host's normal output channel.
-   * @param {string} line - the line to write
-   * @return {void}
+   * @param line - the line to write
    */
-  _print(line) {
+  _print(line: string): void {
     process.stderr.write(line + '\n');
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gAlpha(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gAlpha(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1 && Cons.isNumber(args.car)) {
           const aNumber = args.car <= 0 ? 0 : args.car >= 1 ? 1 : args.car;
@@ -149,36 +150,35 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gArc(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gArc(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 6 &&
-          Cons.isNumber(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.cdr.car)
-        ) {
-          const aFlag = args.cdr.cdr.cdr.cdr.cdr.car >= 0;
-          this.ctx.arc(
-            args.car,
-            args.cdr.car,
-            args.cdr.cdr.car,
-            (Math.PI / 180) * args.cdr.cdr.cdr.car,
-            (Math.PI / 180) * args.cdr.cdr.cdr.cdr.car,
-            aFlag,
-          );
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 6) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          const cdr5 = cdr4.cdr as Cons;
+          const a5 = cdr5.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4) &&
+            Cons.isNumber(a5)
+          ) {
+            const aFlag = a5 >= 0;
+            this.ctx.arc(a0, a1, a2, (Math.PI / 180) * a3, (Math.PI / 180) * a4, aFlag);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw arc.');
         return Cons.nil;
@@ -191,33 +191,31 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gArcTo(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gArcTo(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 5 &&
-          Cons.isNumber(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.car)
-        ) {
-          this.ctx.arcTo(
-            args.car,
-            args.cdr.car,
-            args.cdr.cdr.car,
-            args.cdr.cdr.cdr.car,
-            args.cdr.cdr.cdr.cdr.car,
-          );
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 5) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4)
+          ) {
+            this.ctx.arcTo(a0, a1, a2, a3, a4);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw arc to.');
         return Cons.nil;
@@ -230,35 +228,34 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gBezCurveTo(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gBezCurveTo(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 6 &&
-          Cons.isNumber(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.cdr.car)
-        ) {
-          this.ctx.bezierCurveTo(
-            args.car,
-            args.cdr.car,
-            args.cdr.cdr.car,
-            args.cdr.cdr.cdr.car,
-            args.cdr.cdr.cdr.cdr.car,
-            args.cdr.cdr.cdr.cdr.cdr.car,
-          );
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 6) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          const cdr5 = cdr4.cdr as Cons;
+          const a5 = cdr5.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4) &&
+            Cons.isNumber(a5)
+          ) {
+            this.ctx.bezierCurveTo(a0, a1, a2, a3, a4, a5);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw bezier curve.');
         return Cons.nil;
@@ -271,14 +268,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @return {*}
-   */
-  gClear() {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gClear(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         this.ctx.fillStyle = '#ffffff';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -294,14 +286,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @return {*}
-   */
-  gClose() {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gClose(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.isOpen = false;
@@ -315,15 +302,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gColor(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gColor(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() >= 1) {
           const aColor = this.selectColor(args);
@@ -343,14 +324,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @return {*}
-   */
-  gFill() {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gFill(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         this.ctx.fill();
         this.ctx.save();
@@ -364,15 +340,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gFillColor(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gFillColor(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() >= 1) {
           const aColor = this.selectColor(args);
@@ -391,26 +361,23 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gFillRect(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gFillRect(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 4 &&
-          Cons.isNumber(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car)
-        ) {
-          this.ctx.fillRect(args.car, args.cdr.car, args.cdr.cdr.car, args.cdr.cdr.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 4) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+            this.ctx.fillRect(a0, a1, a2, a3);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw fill rectangle.');
         return Cons.nil;
@@ -423,25 +390,21 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gFillText(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gFillText(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 3 &&
-          Cons.isString(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car)
-        ) {
-          this.ctx.fillText(args.car, args.cdr.car, args.cdr.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 3) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
+            this.ctx.fillText(a0, a1, a2);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw fill text.');
         return Cons.nil;
@@ -454,32 +417,38 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gFillTri(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gFillTri(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 6 &&
-          Cons.isNumber(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.cdr.car)
-        ) {
-          this.ctx.beginPath();
-          this.ctx.moveTo(args.car, args.cdr.car);
-          this.ctx.lineTo(args.cdr.cdr.car, args.cdr.cdr.cdr.car);
-          this.ctx.lineTo(args.cdr.cdr.cdr.cdr.car, args.cdr.cdr.cdr.cdr.cdr.car);
-          this.ctx.fill();
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 6) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          const cdr5 = cdr4.cdr as Cons;
+          const a5 = cdr5.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4) &&
+            Cons.isNumber(a5)
+          ) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(a0, a1);
+            this.ctx.lineTo(a2, a3);
+            this.ctx.lineTo(a4, a5);
+            this.ctx.fill();
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw fill triangle.');
         return Cons.nil;
@@ -492,14 +461,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @return {*}
-   */
-  gFinishPath() {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gFinishPath(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         this.ctx.closePath();
         this.ctx.save();
@@ -513,51 +477,53 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gImage(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gImage(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 3 &&
-          Cons.isString(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car)
-        ) {
-          const anImage = new Image();
-          anImage.src = args.car;
-          anImage.onload = () => {
-            this.ctx.fillStyle = this.ctx.drawImage(anImage, args.cdr.car, args.cdr.cdr.car);
-          };
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        if (
-          args.length() === 5 &&
-          Cons.isString(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.car)
-        ) {
-          const anImage = new Image();
-          anImage.src = args.car;
-          anImage.onload = () => {
-            this.ctx.fillStyle = this.ctx.drawImage(
-              anImage,
-              args.cdr.car,
-              args.cdr.cdr.car,
-              args.cdr.cdr.cdr.car,
-              args.cdr.cdr.cdr.cdr.car,
-            );
-          };
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        const len = args.length();
+        if (len === 3) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
+            const ctx = this.ctx;
+            const anImage = new Image();
+            anImage.src = a0;
+            anImage.onload = () => {
+              ctx.drawImage(anImage, a1, a2);
+            };
+            ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        } else if (len === 5) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          if (
+            Cons.isString(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4)
+          ) {
+            const ctx = this.ctx;
+            const anImage = new Image();
+            anImage.src = a0;
+            anImage.onload = () => {
+              ctx.drawImage(anImage, a1, a2, a3, a4);
+            };
+            ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw Image.');
         return Cons.nil;
@@ -570,20 +536,18 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gLineTo(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gLineTo(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (args.length() === 2 && Cons.isNumber(args.car) && Cons.isNumber(args.cdr.car)) {
-          this.ctx.lineTo(args.car, args.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 2) {
+          const a0 = args.car;
+          const a1 = (args.cdr as Cons).car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
+            this.ctx.lineTo(a0, a1);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw line to');
         return Cons.nil;
@@ -596,15 +560,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gLineCap(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gLineCap(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1 && Cons.isNumber(args.car)) {
           const aString = args.car === 0 ? 'butt' : args.car > 0 ? 'round' : 'square';
@@ -623,15 +581,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gLineJoin(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gLineJoin(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1 && Cons.isNumber(args.car)) {
           const aString = args.car === 0 ? 'miter' : args.car > 0 ? 'round' : 'bevel';
@@ -650,15 +602,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gLineWidth(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gLineWidth(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1 && Cons.isNumber(args.car)) {
           const aNumber = args.car <= 0 ? 1 : args.car;
@@ -677,20 +623,18 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gMoveTo(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gMoveTo(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (args.length() === 2 && Cons.isNumber(args.car) && Cons.isNumber(args.cdr.car)) {
-          this.ctx.moveTo(args.car, args.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 2) {
+          const a0 = args.car;
+          const a1 = (args.cdr as Cons).car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
+            this.ctx.moveTo(a0, a1);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not move');
         return Cons.nil;
@@ -703,14 +647,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @return {*}
-   */
-  gOpen() {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === false) {
+  gOpen(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (!this.isOpen) {
       try {
         this.isOpen = true;
         this.ctx.fillStyle = '#ffffff';
@@ -728,26 +667,26 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gPattern(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gPattern(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (args.length() === 2 && Cons.isString(args.car) && Cons.isNumber(args.cdr.car)) {
-          const aString =
-            args.cdr.car === 0 ? 'repeat' : args.cdr.car > 0 ? 'repeat-x' : 'repeat-y';
-          const anImage = new Image();
-          anImage.src = args.car;
-          anImage.onload = () => {
-            this.ctx.fillStyle = this.ctx.createPattern(anImage, aString);
-          };
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 2) {
+          const a0 = args.car;
+          const a1 = (args.cdr as Cons).car;
+          if (Cons.isString(a0) && Cons.isNumber(a1)) {
+            const aString = a1 === 0 ? 'repeat' : a1 > 0 ? 'repeat-x' : 'repeat-y';
+            const ctx = this.ctx;
+            const anImage = new Image();
+            anImage.src = a0;
+            anImage.onload = () => {
+              // Legacy bug: createPattern() may return null; assigning null to fillStyle
+              // is a no-op in practice (browsers ignore or coerce it).
+              ctx.fillStyle = ctx.createPattern(anImage, aString) as CanvasPattern;
+            };
+            ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not set pattern.');
         return Cons.nil;
@@ -760,26 +699,23 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gQuadCurveTo(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gQuadCurveTo(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 4 &&
-          Cons.isNumber(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car)
-        ) {
-          this.ctx.quadraticCurveTo(args.car, args.cdr.car, args.cdr.cdr.car, args.cdr.cdr.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 4) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+            this.ctx.quadraticCurveTo(a0, a1, a2, a3);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw quadratic curve.');
         return Cons.nil;
@@ -792,18 +728,14 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @return {*}
-   */
-  gSaveJpeg() {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gSaveJpeg(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         const anImage = new Image();
         anImage.crossOrigin = 'Anonymous';
-        anImage.src = this.canvas.toDataURL('image/jpeg');
+        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
+        anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/jpeg');
         const link = document.createElement('a');
         link.href = anImage.src;
         link.download = 'canvas';
@@ -818,22 +750,18 @@ export class GraphicsPlugin extends Object {
         return Cons.nil;
       }
     }
-    this._print('The canvas has already been opened.');
+    this._print('The canvas is closed and cannot be executed.');
     return Cons.nil;
   }
 
-  /**
-   * @return {*}
-   */
-  gSavePng() {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gSavePng(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         const anImage = new Image();
         anImage.crossOrigin = 'Anonymous';
-        anImage.src = this.canvas.toDataURL('image/png');
+        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
+        anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/png');
         const link = document.createElement('a');
         link.href = anImage.src;
         link.download = 'canvas';
@@ -848,24 +776,22 @@ export class GraphicsPlugin extends Object {
         return Cons.nil;
       }
     }
-    this._print('The canvas has already been opened.');
+    this._print('The canvas is closed and cannot be executed.');
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gScale(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gScale(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (args.length() === 2 && Cons.isNumber(args.car) && Cons.isNumber(args.cdr.car)) {
-          this.ctx.scale(args.car, args.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 2) {
+          const a0 = args.car;
+          const a1 = (args.cdr as Cons).car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
+            this.ctx.scale(a0, a1);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not scale.');
         return Cons.nil;
@@ -878,19 +804,13 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gShadowBlur(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gShadowBlur(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       if (args.length() === 1 && Cons.isNumber(args.car)) {
         // Legacy: writes to ctx.Blur (typo) rather than ctx.shadowBlur.
         // Preserved verbatim from the original Graphist.js.
-        this.ctx.Blur = args.car;
+        (this.ctx as unknown as { Blur: number }).Blur = args.car;
         this.ctx.save();
         return InterpretedSymbol.of('t');
       }
@@ -901,15 +821,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gShadowColor(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gShadowColor(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1) {
           const aColor = this.selectColor(args);
@@ -928,15 +842,11 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gShadowOffsetX(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  // NOTE: gShadowOffsetX, gShadowOffsetY, and gShadowBlur intentionally omit try/catch.
+  // The original Graphist.js had the same structure for all three shadow-property setters.
+  gShadowOffsetX(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       if (args.length() === 1 && Cons.isNumber(args.car)) {
         this.ctx.shadowOffsetX = args.car;
         this.ctx.save();
@@ -949,15 +859,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gShadowOffsetY(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gShadowOffsetY(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       if (args.length() === 1 && Cons.isNumber(args.car)) {
         this.ctx.shadowOffsetY = args.car;
         this.ctx.save();
@@ -970,16 +874,10 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gSleep(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
-      const sleep = (ms) => {
+  gSleep(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      const sleep = (ms: number): void => {
         const time = Date.now() + ms;
         while (Date.now() < time) {
           // busy wait
@@ -992,18 +890,13 @@ export class GraphicsPlugin extends Object {
       this._print('Can not sleep');
       return Cons.nil;
     }
-    this._print('The canvas has already been opened.');
+    this._print('The canvas is closed and cannot be executed.');
     return Cons.nil;
   }
 
-  /**
-   * @return {*}
-   */
-  gStartPath() {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gStartPath(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         this.ctx.beginPath();
         this.ctx.save();
@@ -1017,14 +910,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @return {*}
-   */
-  gStroke() {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gStroke(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         this.ctx.stroke();
         this.ctx.save();
@@ -1038,15 +926,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gStrokeColor(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gStrokeColor(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() >= 1) {
           const aColor = this.selectColor(args);
@@ -1065,26 +947,23 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gStrokeRect(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gStrokeRect(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 4 &&
-          Cons.isNumber(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car)
-        ) {
-          this.ctx.strokeRect(args.car, args.cdr.car, args.cdr.cdr.car, args.cdr.cdr.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 4) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+            this.ctx.strokeRect(a0, a1, a2, a3);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw stroke rectangle.');
         return Cons.nil;
@@ -1097,26 +976,24 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gStrokeText(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gStrokeText(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 3 &&
-          Cons.isString(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car)
-        ) {
-          this.ctx.strokeText(args.car, args.cdr.car, args.cdr.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 3) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
+            this.ctx.strokeText(a0, a1, a2);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
+        // Legacy typo: message says 'fill text' but this method strokes. Preserved from the
+        // original Graphist.js.
         this._print('Can not draw fill text.');
         return Cons.nil;
       } catch {
@@ -1128,33 +1005,39 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gStrokeTri(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gStrokeTri(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 6 &&
-          Cons.isNumber(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.cdr.cdr.car)
-        ) {
-          this.ctx.beginPath();
-          this.ctx.moveTo(args.car, args.cdr.car);
-          this.ctx.lineTo(args.cdr.cdr.car, args.cdr.cdr.cdr.car);
-          this.ctx.lineTo(args.cdr.cdr.cdr.cdr.car, args.cdr.cdr.cdr.cdr.cdr.car);
-          this.ctx.closePath();
-          this.ctx.stroke();
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 6) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          const cdr5 = cdr4.cdr as Cons;
+          const a5 = cdr5.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4) &&
+            Cons.isNumber(a5)
+          ) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(a0, a1);
+            this.ctx.lineTo(a2, a3);
+            this.ctx.lineTo(a4, a5);
+            this.ctx.closePath();
+            this.ctx.stroke();
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw stroke triangle.');
         return Cons.nil;
@@ -1167,18 +1050,12 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gTextAlign(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gTextAlign(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1 && Cons.isString(args.car)) {
-          this.ctx.textAlign = args.car;
+          this.ctx.textAlign = args.car as CanvasTextAlign;
           this.ctx.save();
           return InterpretedSymbol.of('t');
         }
@@ -1193,18 +1070,12 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gTextBaseline(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gTextBaseline(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1 && Cons.isString(args.car)) {
-          this.ctx.textBaseline = args.car;
+          this.ctx.textBaseline = args.car as CanvasTextBaseline;
           this.ctx.save();
           return InterpretedSymbol.of('t');
         }
@@ -1219,15 +1090,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gTextDirection(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gTextDirection(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1 && Cons.isNumber(args.car)) {
           const aString = args.car === 0 ? 'inherit' : args.car > 0 ? 'rtl' : 'ltr';
@@ -1246,15 +1111,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gTextFont(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gTextFont(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1 && Cons.isString(args.car)) {
           this.ctx.font = args.car;
@@ -1272,20 +1131,18 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gTranslate(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gTranslate(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (args.length() === 2 && Cons.isNumber(args.car) && Cons.isNumber(args.cdr.car)) {
-          this.ctx.translate(args.car, args.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 2) {
+          const a0 = args.car;
+          const a1 = (args.cdr as Cons).car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
+            this.ctx.translate(a0, a1);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not translate.');
         return Cons.nil;
@@ -1298,26 +1155,23 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gRect(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gRect(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
-        if (
-          args.length() === 4 &&
-          Cons.isNumber(args.car) &&
-          Cons.isNumber(args.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.car) &&
-          Cons.isNumber(args.cdr.cdr.cdr.car)
-        ) {
-          this.ctx.rect(args.car, args.cdr.car, args.cdr.cdr.car, args.cdr.cdr.cdr.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
+        if (args.length() === 4) {
+          const a0 = args.car;
+          const cdr1 = args.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+            this.ctx.rect(a0, a1, a2, a3);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
         }
         this._print('Can not draw rectangle.');
         return Cons.nil;
@@ -1330,15 +1184,9 @@ export class GraphicsPlugin extends Object {
     return Cons.nil;
   }
 
-  /**
-   * @param {Cons} args
-   * @return {*}
-   */
-  gRotate(args) {
-    if (!this.checkSupport()) {
-      return Cons.nil;
-    }
-    if (this.isOpen === true) {
+  gRotate(args: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
       try {
         if (args.length() === 1 && Cons.isNumber(args.car)) {
           this.ctx.rotate((Math.PI / 180) * args.car);
@@ -1360,37 +1208,37 @@ export class GraphicsPlugin extends Object {
    * Parses a color spec from the head of the argument Cons. Accepts
    * (1 string), (3 numbers — rgb), or (4 numbers — rgba); falls back to
    * `'black'` on anything else (legacy behavior).
-   * @param {Cons} args
-   * @return {string} CSS color
+   * @param args - the argument Cons to parse
+   * @return CSS color string
    */
-  selectColor(args) {
+  selectColor(args: Cons): string {
     let aColor = 'black';
-    if (args.length() === 1 && Cons.isString(args.car)) {
-      aColor = args.car;
-    } else if (
-      args.length() === 3 &&
-      Cons.isNumber(args.car) &&
-      Cons.isNumber(args.cdr.car) &&
-      Cons.isNumber(args.cdr.cdr.car)
-    ) {
-      aColor = 'rgb(' + args.car + ', ' + args.cdr.car + ', ' + args.cdr.cdr.car + ')';
-    } else if (
-      args.length() === 4 &&
-      Cons.isNumber(args.car) &&
-      Cons.isNumber(args.cdr.car) &&
-      Cons.isNumber(args.cdr.cdr.car) &&
-      Cons.isNumber(args.cdr.cdr.cdr.car)
-    ) {
-      aColor =
-        'rgba(' +
-        args.car +
-        ', ' +
-        args.cdr.car +
-        ', ' +
-        args.cdr.cdr.car +
-        ', ' +
-        args.cdr.cdr.cdr.car +
-        ')';
+    const len = args.length();
+    const a0 = args.car;
+    if (len === 1 && Cons.isString(a0)) {
+      aColor = a0;
+    } else if (len === 3) {
+      const cdr1 = args.cdr as Cons;
+      const a1 = cdr1.car;
+      const cdr2 = cdr1.cdr as Cons;
+      const a2 = cdr2.car;
+      if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
+        aColor = `rgb(${a0}, ${a1}, ${a2})`;
+      } else {
+        this._print('Can not set color. set color "black".');
+      }
+    } else if (len === 4) {
+      const cdr1 = args.cdr as Cons;
+      const a1 = cdr1.car;
+      const cdr2 = cdr1.cdr as Cons;
+      const a2 = cdr2.car;
+      const cdr3 = cdr2.cdr as Cons;
+      const a3 = cdr3.car;
+      if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+        aColor = `rgba(${a0}, ${a1}, ${a2}, ${a3})`;
+      } else {
+        this._print('Can not set color. set color "black".');
+      }
     } else {
       this._print('Can not set color. set color "black".');
     }
@@ -1399,10 +1247,10 @@ export class GraphicsPlugin extends Object {
 
   /**
    * Builds the dispatch table.
-   * @return {Map<InterpretedSymbol, string>} the dispatch table
+   * @return the dispatch table
    */
-  static setup() {
-    const aTable = new Map();
+  static setup(): Map<InterpretedSymbol, string> {
+    const aTable = new Map<InterpretedSymbol, string>();
     aTable.set(InterpretedSymbol.of('galpha'), 'gAlpha');
     aTable.set(InterpretedSymbol.of('garc'), 'gArc');
     aTable.set(InterpretedSymbol.of('garc-to'), 'gArcTo');
