@@ -10,10 +10,10 @@ const { ERROR, WARN, OFF } = RULE_LEVEL;
 export const typescriptConfigs = [
   ...tseslint.configs.strictTypeChecked.map((config) => ({
     ...config,
-    files: SRC.concat(TEST),
+    files: [...SRC, ...TEST],
   })),
   {
-    files: SRC.concat(TEST),
+    files: [...SRC, ...TEST],
     languageOptions: {
       parserOptions: {
         projectService: true,
