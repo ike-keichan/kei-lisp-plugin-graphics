@@ -682,8 +682,9 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
             const anImage = new Image();
             anImage.src = a0;
             anImage.onload = () => {
-              // Legacy bug: createPattern() may return null; assigning null to fillStyle
-              // is a no-op in practice (browsers ignore or coerce it).
+              // Legacy bug: createPattern() may return null; browsers coerce null to the
+              // string "null" (not a valid color), so the fill silently becomes black.
+              // Preserved verbatim from the original Graphist.js.
               ctx.fillStyle = ctx.createPattern(anImage, aString) as CanvasPattern;
             };
             ctx.save();
@@ -806,7 +807,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     return Cons.nil;
   }
 
-  // NOTE: intentionally omits try/catch — same structure as gShadowOffsetX and gShadowOffsetY.
   gShadowBlur(args: Cons): LispValue {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {
