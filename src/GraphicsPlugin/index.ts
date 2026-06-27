@@ -117,16 +117,18 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   /**
-   * Writes a diagnostic line directly to `process.stderr`, matching the
-   * convention used by kei-lisp itself (`Applier.format` writes to
-   * `process.stdout`). In a Node runtime this hits the real stderr; in a
-   * browser kei-lisp host (e.g. kei-lisp-web) the host typically swaps
-   * `process.stderr.write` for a sink that routes to the REPL output panel,
-   * so the same call reaches the user via the host's normal output channel.
+   * Writes a diagnostic line to stderr. In a Node runtime this calls
+   * `process.stderr.write`; in a browser or Worker context where `process`
+   * is not defined it falls back to `console.error`. The caller is
+   * responsible for shimming either surface if a custom output sink is needed.
    * @param line - the line to write
    */
   _print(line: string): void {
-    process.stderr.write(line + '\n');
+    try {
+      process.stderr.write(line + '\n');
+    } catch {
+      console.error(line);
+    }
   }
 
   gAlpha(args: Cons): LispValue {

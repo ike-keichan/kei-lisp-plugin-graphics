@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LispValue, PluginContext } from 'kei-lisp';
 import { Cons, InterpretedSymbol, LispInterpreter, StreamManager } from 'kei-lisp';
 
+import { createGraphicsPlugin } from '../index.js';
 import { GraphicsPlugin } from './index.js';
 
 type FakeCtx = {
@@ -287,6 +288,23 @@ describe('GraphicsPlugin', () => {
     });
   });
 
+  describe('gLineTo', () => {
+    it('forwards x and y to ctx.lineTo', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'lineTo');
+      plugin.apply(InterpretedSymbol.of('gline-to'), args(30, 40), makeCtx());
+      expect(spy).toHaveBeenCalledWith(30, 40);
+    });
+
+    it('returns nil on wrong arity', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const result = plugin.apply(InterpretedSymbol.of('gline-to'), args(30), makeCtx());
+      expect(result).toBe(Cons.nil);
+    });
+  });
+
   describe('gFillRect', () => {
     it('forwards x, y, w, h to ctx.fillRect', () => {
       const { plugin } = makePlugin();
@@ -295,6 +313,23 @@ describe('GraphicsPlugin', () => {
       spy.mockClear();
       plugin.apply(InterpretedSymbol.of('gfill-rect'), args(10, 20, 100, 50), makeCtx());
       expect(spy).toHaveBeenCalledWith(10, 20, 100, 50);
+    });
+  });
+
+  describe('gFillText', () => {
+    it('forwards text, x, y to ctx.fillText', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'fillText');
+      plugin.apply(InterpretedSymbol.of('gfill-text'), args('hello', 5, 15), makeCtx());
+      expect(spy).toHaveBeenCalledWith('hello', 5, 15);
+    });
+
+    it('returns nil when first argument is not a string', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const result = plugin.apply(InterpretedSymbol.of('gfill-text'), args(42, 5, 15), makeCtx());
+      expect(result).toBe(Cons.nil);
     });
   });
 
@@ -565,5 +600,27 @@ describe('GraphicsPlugin', () => {
     it('falls through to built-ins for non-g... symbols', () => {
       expect(interpreter.evalString('(+ 1 2 3)')).toBe(6);
     });
+  });
+});
+
+describe('createGraphicsPlugin', () => {
+  it('returns a GraphicsPlugin bound to the provided canvas', () => {
+    const canvas = document.createElement('canvas');
+    vi.spyOn(canvas, 'getContext').mockReturnValue(
+      makeFakeCtx() as unknown as CanvasRenderingContext2D,
+    );
+    const plugin = createGraphicsPlugin({ canvas });
+    expect(plugin).toBeInstanceOf(GraphicsPlugin);
+    expect(plugin.canvas).toBe(canvas);
+  });
+
+  it('produces a plugin that responds to gopen', () => {
+    const canvas = document.createElement('canvas');
+    vi.spyOn(canvas, 'getContext').mockReturnValue(
+      makeFakeCtx() as unknown as CanvasRenderingContext2D,
+    );
+    const plugin = createGraphicsPlugin({ canvas });
+    const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+    expect(result).toBe(InterpretedSymbol.of('t'));
   });
 });
