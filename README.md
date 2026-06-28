@@ -1,5 +1,6 @@
 # kei-lisp-plugin-graphics
 
+[![CI](https://github.com/ike-keichan/kei-lisp-plugin-graphics/actions/workflows/ci.yml/badge.svg)](https://github.com/ike-keichan/kei-lisp-plugin-graphics/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/kei-lisp-plugin-graphics.svg)](https://www.npmjs.com/package/kei-lisp-plugin-graphics)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen.svg)](https://nodejs.org/)
@@ -73,7 +74,7 @@ canvas's 2D rendering context.
 Each function returns `t` on success. See [`docs/graphics.md`](./docs/graphics.md)
 for argument signatures and side effects.
 
-## Documentation
+## Reference
 
 - [API Reference](./docs/api.md) — TypeScript / JavaScript API
 - [Graphics Reference](./docs/graphics.md) — every `g…` Lisp function
@@ -95,7 +96,6 @@ Requires [pnpm](https://pnpm.io/) and Node.js 24+
 | `pnpm build`      | Build for distribution (CJS + ESM + types) |
 | `pnpm test`       | Run tests                                  |
 | `pnpm test:watch` | Run tests in watch mode                    |
-| `pnpm typecheck`  | Type check (`tsc --noEmit`)                |
 | `pnpm check`      | Run all checks (format, lint, spell, ...)  |
 | `pnpm fix`        | Auto-fix format and lint issues            |
 
