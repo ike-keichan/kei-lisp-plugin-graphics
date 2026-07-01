@@ -79,6 +79,13 @@ mismatch, or canvas not open).
 | `gscale`     | `x: number, y: number` | Scale the coordinate system     |
 | `grotate`    | `angle: number`        | Rotate by `angle` degrees       |
 
+## State
+
+| Function   | Arguments | Description                                                      |
+| ---------- | --------- | ---------------------------------------------------------------- |
+| `gsave`    | —         | Push the current drawing state onto the state stack (`save`)     |
+| `grestore` | —         | Pop the last saved drawing state off the state stack (`restore`) |
+
 ## Image / Export
 
 | Function     | Arguments                                                 | Description                                                                                                                            |
