@@ -14,6 +14,7 @@ type FakeContext = {
   lineCap: string;
   lineJoin: string;
   shadowColor: string;
+  shadowBlur: number;
   shadowOffsetX: number;
   shadowOffsetY: number;
   font: string;
@@ -37,6 +38,7 @@ type FakeContext = {
   arcTo: ReturnType<typeof vi.fn>;
   rect: ReturnType<typeof vi.fn>;
   save: ReturnType<typeof vi.fn>;
+  restore: ReturnType<typeof vi.fn>;
   translate: ReturnType<typeof vi.fn>;
   scale: ReturnType<typeof vi.fn>;
   rotate: ReturnType<typeof vi.fn>;
@@ -58,6 +60,7 @@ function makeFakeContext(): FakeContext {
     lineCap: 'butt',
     lineJoin: 'miter',
     shadowColor: '',
+    shadowBlur: 0,
     shadowOffsetX: 0,
     shadowOffsetY: 0,
     font: '',
@@ -81,6 +84,7 @@ function makeFakeContext(): FakeContext {
     arcTo: vi.fn(),
     rect: vi.fn(),
     save: vi.fn(),
+    restore: vi.fn(),
     translate: vi.fn(),
     scale: vi.fn(),
     rotate: vi.fn(),
@@ -227,12 +231,12 @@ describe('GraphicsPlugin', () => {
       expect(second).toBe(Cons.nil);
     });
 
-    it('prints the hardcoded legacy size message regardless of actual canvas dimensions', () => {
+    it('prints the actual canvas dimensions', () => {
       const { plugin } = makePlugin();
       const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
       try {
         plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-        expect(spy).toHaveBeenCalledWith('canvas size, width : 600 height : 300\n');
+        expect(spy).toHaveBeenCalledWith('canvas size, width : 800 height : 600\n');
       } finally {
         spy.mockRestore();
       }
@@ -463,11 +467,11 @@ describe('GraphicsPlugin', () => {
   });
 
   describe('gShadowBlur', () => {
-    it('preserves the legacy typo by writing ctx.Blur instead of ctx.shadowBlur', () => {
+    it('writes the blur radius to ctx.shadowBlur', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       plugin.apply(InterpretedSymbol.of('gshadow-blur'), arguments_(8), makeContext());
-      expect((plugin.ctx as unknown as { Blur: number }).Blur).toBe(8);
+      expect((plugin.ctx as CanvasRenderingContext2D).shadowBlur).toBe(8);
     });
   });
 
@@ -484,13 +488,13 @@ describe('GraphicsPlugin', () => {
       expect(spy).toHaveBeenCalledWith('hello', 10, 20);
     });
 
-    it('preserves the legacy typo by emitting "Can not draw fill text." on failure', () => {
+    it('emits "Can not draw stroke text." on failure', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
       try {
         plugin.apply(InterpretedSymbol.of('gstroke-text'), arguments_(10, 20), makeContext());
-        expect(spy).toHaveBeenCalledWith('Can not draw fill text.\n');
+        expect(spy).toHaveBeenCalledWith('Can not draw stroke text.\n');
       } finally {
         spy.mockRestore();
       }
@@ -504,6 +508,52 @@ describe('GraphicsPlugin', () => {
       const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'rotate');
       plugin.apply(InterpretedSymbol.of('grotate'), arguments_(90), makeContext());
       expect(spy).toHaveBeenCalledWith(Math.PI / 2);
+    });
+  });
+
+  describe('gSave', () => {
+    it('forwards to ctx.save', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'save');
+      spy.mockClear();
+      const result = plugin.apply(InterpretedSymbol.of('gsave'), Cons.nil, makeContext());
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(result).toBe(InterpretedSymbol.of('t'));
+    });
+
+    it('returns nil when the canvas is not open', () => {
+      const { plugin } = makePlugin();
+      const result = plugin.apply(InterpretedSymbol.of('gsave'), Cons.nil, makeContext());
+      expect(result).toBe(Cons.nil);
+    });
+  });
+
+  describe('gRestore', () => {
+    it('forwards to ctx.restore', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'restore');
+      const result = plugin.apply(InterpretedSymbol.of('grestore'), Cons.nil, makeContext());
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(result).toBe(InterpretedSymbol.of('t'));
+    });
+
+    it('returns nil when the canvas is not open', () => {
+      const { plugin } = makePlugin();
+      const result = plugin.apply(InterpretedSymbol.of('grestore'), Cons.nil, makeContext());
+      expect(result).toBe(Cons.nil);
+    });
+  });
+
+  describe('drawing methods no longer auto-push the save stack', () => {
+    it('does not call ctx.save() on a plain draw (legacy leak removed)', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'save');
+      spy.mockClear();
+      plugin.apply(InterpretedSymbol.of('gfill-rect'), arguments_(0, 0, 10, 10), makeContext());
+      expect(spy).not.toHaveBeenCalled();
     });
   });
 

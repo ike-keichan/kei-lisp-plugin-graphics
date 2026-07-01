@@ -47,7 +47,7 @@ interface.
 ## `GraphicsPlugin`
 
 The plugin class. Implements `KeiLispPlugin` (`name` / `has` / `apply`) and
-exposes 43 `g…` drawing primitives to the Lisp evaluator.
+exposes 45 `g…` drawing primitives to the Lisp evaluator.
 
 You can instantiate it directly if you need to inspect the instance:
 

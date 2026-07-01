@@ -14,7 +14,7 @@ import { Cons, InterpretedSymbol } from 'kei-lisp';
  * @class
  * @classdesc Canvas2D drawing plugin for the kei-lisp interpreter. Implements
  *            the `KeiLispPlugin` contract (`name` / `has` / `apply`) and
- *            exposes 43 `g…` Lisp functions that proxy to a 2D rendering
+ *            exposes 45 `g…` Lisp functions that proxy to a 2D rendering
  *            context.
  * @author Keisuke Ikeda
  * @this {GraphicsPlugin}
@@ -75,6 +75,8 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     aTable.set(InterpretedSymbol.of('gtranslate'), 'gTranslate');
     aTable.set(InterpretedSymbol.of('grect'), 'gRect');
     aTable.set(InterpretedSymbol.of('grotate'), 'gRotate');
+    aTable.set(InterpretedSymbol.of('gsave'), 'gSave');
+    aTable.set(InterpretedSymbol.of('grestore'), 'gRestore');
     return aTable;
   }
 
@@ -124,8 +126,8 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   /**
    * Dispatches the given symbol to the matching `g…` method.
    * @param aSymbol - the call symbol
-   * @param args - the evaluated argument list
-   * @param _ctx - the interpreter context (unused by this plugin)
+   * @param arguments_ - the evaluated argument list
+   * @param _context - the interpreter context (unused by this plugin)
    * @return the method's result, or `Cons.nil` if dispatch fails
    */
   apply(aSymbol: InterpretedSymbol, arguments_: Cons, _context: PluginContext): LispValue {
@@ -135,7 +137,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   /**
    * Resolves the procedure name and invokes the matching method.
    * @param procedure - the Lisp symbol
-   * @param args - the evaluated argument list
+   * @param arguments_ - the evaluated argument list
    * @return the method's result, or `Cons.nil` if not registered
    */
   selectProcedure(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
@@ -153,7 +155,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
    * Ramda `R.invoker(1, methodName)(args, this)` call would surface the same
    * error by attempting to call `undefined`.
    * @param procedure - the Lisp symbol
-   * @param args - the evaluated argument list
+   * @param arguments_ - the evaluated argument list
    * @return the method's result
    */
   buildInFunction(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
@@ -188,7 +190,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
           const aNumber = arguments_.car <= 0 ? 0 : arguments_.car >= 1 ? 1 : arguments_.car;
           this.ctx.globalAlpha = aNumber;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set alpha.');
@@ -228,7 +229,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           ) {
             const isAFlag = a5 >= 0;
             this.ctx.arc(a0, a1, a2, (Math.PI / 180) * a3, (Math.PI / 180) * a4, isAFlag);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -265,7 +265,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
             Cons.isNumber(a4)
           ) {
             this.ctx.arcTo(a0, a1, a2, a3, a4);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -305,7 +304,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
             Cons.isNumber(a5)
           ) {
             this.ctx.bezierCurveTo(a0, a1, a2, a3, a4, a5);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -327,7 +325,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         this.ctx.fillStyle = '#ffffff';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.fillStyle = '#000000';
-        this.ctx.save();
         return InterpretedSymbol.of('t');
       } catch {
         this.#print('Can not clear.');
@@ -362,7 +359,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const aColor = this.selectColor(arguments_);
           this.ctx.fillStyle = aColor;
           this.ctx.strokeStyle = aColor;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set color.');
@@ -381,7 +377,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (this.isOpen) {
       try {
         this.ctx.fill();
-        this.ctx.save();
         return InterpretedSymbol.of('t');
       } catch {
         this.#print('Can not fill.');
@@ -399,7 +394,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         if (arguments_.length() >= 1) {
           const aColor = this.selectColor(arguments_);
           this.ctx.fillStyle = aColor;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set fill color.');
@@ -427,7 +421,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a3 = cdr3.car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
             this.ctx.fillRect(a0, a1, a2, a3);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -454,7 +447,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a2 = cdr2.car;
           if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
             this.ctx.fillText(a0, a1, a2);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -498,7 +490,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
             this.ctx.lineTo(a2, a3);
             this.ctx.lineTo(a4, a5);
             this.ctx.fill();
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -518,7 +509,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (this.isOpen) {
       try {
         this.ctx.closePath();
-        this.ctx.save();
         return InterpretedSymbol.of('t');
       } catch {
         this.#print('Can not finish path.');
@@ -547,7 +537,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
             anImage.onload = () => {
               context.drawImage(anImage, a1, a2);
             };
-            context.save();
             return InterpretedSymbol.of('t');
           }
         } else if (length_ === 5) {
@@ -573,7 +562,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
             anImage.onload = () => {
               context.drawImage(anImage, a1, a2, a3, a4);
             };
-            context.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -597,7 +585,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a1 = (arguments_.cdr as Cons).car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
             this.ctx.lineTo(a0, a1);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -619,7 +606,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
           const aString = arguments_.car === 0 ? 'butt' : arguments_.car > 0 ? 'round' : 'square';
           this.ctx.lineCap = aString;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set line cap.');
@@ -640,7 +626,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
           const aString = arguments_.car === 0 ? 'miter' : arguments_.car > 0 ? 'round' : 'bevel';
           this.ctx.lineJoin = aString;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set line join.');
@@ -661,7 +646,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
           const aNumber = arguments_.car <= 0 ? 1 : arguments_.car;
           this.ctx.lineWidth = aNumber;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set line width.');
@@ -684,7 +668,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a1 = (arguments_.cdr as Cons).car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
             this.ctx.moveTo(a0, a1);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -707,8 +690,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         this.ctx.fillStyle = '#ffffff';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.fillStyle = '#000000';
-        this.ctx.save();
-        this.#print('canvas size, width : 600 height : 300');
+        this.#print(`canvas size, width : ${this.canvas.width} height : ${this.canvas.height}`);
         return InterpretedSymbol.of('t');
       } catch {
         this.#print('Can not open.');
@@ -736,7 +718,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
               // is a no-op in practice (browsers ignore or coerce it).
               context.fillStyle = context.createPattern(anImage, aString) as CanvasPattern;
             };
-            context.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -765,7 +746,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a3 = cdr3.car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
             this.ctx.quadraticCurveTo(a0, a1, a2, a3);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -841,7 +821,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a1 = (arguments_.cdr as Cons).car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
             this.ctx.scale(a0, a1);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -860,10 +839,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {
       if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-        // Legacy: writes to ctx.Blur (typo) rather than ctx.shadowBlur.
-        // Preserved verbatim from the original Graphist.js.
-        (this.ctx as unknown as { Blur: number }).Blur = arguments_.car;
-        this.ctx.save();
+        this.ctx.shadowBlur = arguments_.car;
         return InterpretedSymbol.of('t');
       }
       this.#print('Can not set shadow blur.');
@@ -880,7 +856,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         if (arguments_.length() === 1) {
           const aColor = this.selectColor(arguments_);
           this.ctx.shadowColor = aColor;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set shadow color.');
@@ -901,7 +876,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (this.isOpen) {
       if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
         this.ctx.shadowOffsetX = arguments_.car;
-        this.ctx.save();
         return InterpretedSymbol.of('t');
       }
       this.#print('Can not set shadow offsetX.');
@@ -916,7 +890,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (this.isOpen) {
       if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
         this.ctx.shadowOffsetY = arguments_.car;
-        this.ctx.save();
         return InterpretedSymbol.of('t');
       }
       this.#print('Can not set shadow offsetY.');
@@ -951,7 +924,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (this.isOpen) {
       try {
         this.ctx.beginPath();
-        this.ctx.save();
         return InterpretedSymbol.of('t');
       } catch {
         this.#print('Can not start path.');
@@ -967,7 +939,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (this.isOpen) {
       try {
         this.ctx.stroke();
-        this.ctx.save();
         return InterpretedSymbol.of('t');
       } catch {
         this.#print('Can not stroke.');
@@ -985,7 +956,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         if (arguments_.length() >= 1) {
           const aColor = this.selectColor(arguments_);
           this.ctx.strokeStyle = aColor;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set stroke color');
@@ -1013,7 +983,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a3 = cdr3.car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
             this.ctx.strokeRect(a0, a1, a2, a3);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -1040,16 +1009,13 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a2 = cdr2.car;
           if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
             this.ctx.strokeText(a0, a1, a2);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
-        // Legacy typo: message says 'fill text' but this method strokes. Preserved from the
-        // original Graphist.js.
-        this.#print('Can not draw fill text.');
+        this.#print('Can not draw stroke text.');
         return Cons.nil;
       } catch {
-        this.#print('Can not draw fill text.');
+        this.#print('Can not draw stroke text.');
         return Cons.nil;
       }
     }
@@ -1087,7 +1053,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
             this.ctx.lineTo(a4, a5);
             this.ctx.closePath();
             this.ctx.stroke();
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -1108,7 +1073,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
       try {
         if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
           this.ctx.textAlign = arguments_.car as CanvasTextAlign;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set text align.');
@@ -1128,7 +1092,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
       try {
         if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
           this.ctx.textBaseline = arguments_.car as CanvasTextBaseline;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set text baseline.');
@@ -1149,7 +1112,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
         if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
           const aString = arguments_.car === 0 ? 'inherit' : arguments_.car > 0 ? 'rtl' : 'ltr';
           this.ctx.direction = aString;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set text direction.');
@@ -1169,7 +1131,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
       try {
         if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
           this.ctx.font = arguments_.car;
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set text font.');
@@ -1192,7 +1153,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a1 = (arguments_.cdr as Cons).car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
             this.ctx.translate(a0, a1);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -1221,7 +1181,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
           const a3 = cdr3.car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
             this.ctx.rect(a0, a1, a2, a3);
-            this.ctx.save();
             return InterpretedSymbol.of('t');
           }
         }
@@ -1242,13 +1201,55 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
       try {
         if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
           this.ctx.rotate((Math.PI / 180) * arguments_.car);
-          this.ctx.save();
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not rotate.');
         return Cons.nil;
       } catch {
         this.#print('Can not rotate.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  /**
+   * Pushes the current drawing state (styles, transform, clip) onto the
+   * context's state stack. Pairs with `gRestore` to let Lisp callers manage
+   * state explicitly. Replaces the legacy per-method `ctx.save()` calls, which
+   * pushed state on every draw with no matching `restore()` and grew the stack
+   * unbounded.
+   * @return `t` on success, `Cons.nil` otherwise
+   */
+  gSave(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        this.ctx.save();
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print('Can not save.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  /**
+   * Pops the most recently saved drawing state off the context's state stack.
+   * Pairs with `gSave`. Popping an empty stack is a no-op per the Canvas spec.
+   * @return `t` on success, `Cons.nil` otherwise
+   */
+  gRestore(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        this.ctx.restore();
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print('Can not restore.');
         return Cons.nil;
       }
     }

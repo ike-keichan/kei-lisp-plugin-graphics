@@ -11,7 +11,7 @@ interpreter. Register it on a `LispInterpreter` and call drawing primitives
 
 ## Features
 
-- 43 Canvas2D drawing primitives (`g…` symbols) callable directly from Lisp source
+- 45 Canvas2D drawing primitives (`g…` symbols) callable directly from Lisp source
 - Works with `HTMLCanvasElement` and `OffscreenCanvas`
 - ESM and CommonJS dual output with TypeScript types
 - Zero runtime dependencies
@@ -76,6 +76,7 @@ canvas's 2D rendering context.
 | Shadow         | `gshadow-color`, `gshadow-blur`, `gshadow-offsetx`, `gshadow-offsety`                                              |
 | Text           | `gtext-font`, `gtext-align`, `gtext-line`, `gtext-dire`                                                            |
 | Transform      | `gtranslate`, `gscale`, `grotate`                                                                                  |
+| State          | `gsave`, `grestore`                                                                                                |
 | Image / export | `gimage`, `gsave-png`, `gsave-jpeg`                                                                                |
 
 Each function returns `t` on success. See [`docs/graphics.md`](./docs/graphics.md)

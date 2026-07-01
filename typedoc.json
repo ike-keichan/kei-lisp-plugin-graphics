@@ -7,7 +7,6 @@
   "excludePrivate": true,
   "excludeInternal": true,
   "hideGenerator": true,
-  "intentionallyNotExported": ["Table", "StreamManager", "Loop"],
   "blockTags": [
     "@param",
     "@returns",

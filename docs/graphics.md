@@ -15,17 +15,17 @@ mismatch, or canvas not open).
 
 ## Path
 
-| Function        | Arguments                                                                      | Description                                      |
-| --------------- | ------------------------------------------------------------------------------ | ------------------------------------------------ |
-| `gstart-path`   | —                                                                              | Begin a new path (`beginPath`)                   |
-| `gfinish-path`  | —                                                                              | Close the current path (`closePath`)             |
-| `gmove-to`      | `x: number, y: number`                                                         | Move the pen to (`x`, `y`)                       |
-| `gline-to`      | `x: number, y: number`                                                         | Draw a line from the current point to (`x`, `y`) |
-| `gquadcurve-to` | `cpx: number, cpy: number, x: number, y: number`                               | Quadratic Bézier curve                           |
-| `gbezcurve-to`  | `cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number` | Cubic Bézier curve                               |
-| `garc`          | `x: number, y: number, r: number, start: number, end: number`                  | Arc                                              |
-| `garc-to`       | `x1: number, y1: number, x2: number, y2: number, r: number`                    | Arc with two tangent points                      |
-| `grect`         | `x: number, y: number, w: number, h: number`                                   | Rectangle path                                   |
+| Function        | Arguments                                                                      | Description                                                         |
+| --------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| `gstart-path`   | —                                                                              | Begin a new path (`beginPath`)                                      |
+| `gfinish-path`  | —                                                                              | Close the current path (`closePath`)                                |
+| `gmove-to`      | `x: number, y: number`                                                         | Move the pen to (`x`, `y`)                                          |
+| `gline-to`      | `x: number, y: number`                                                         | Draw a line from the current point to (`x`, `y`)                    |
+| `gquadcurve-to` | `cpx: number, cpy: number, x: number, y: number`                               | Quadratic Bézier curve                                              |
+| `gbezcurve-to`  | `cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number` | Cubic Bézier curve                                                  |
+| `garc`          | `x: number, y: number, r: number, start: number, end: number, ccw: number`     | Arc; `start` / `end` in degrees, `ccw >= 0` draws counter-clockwise |
+| `garc-to`       | `x1: number, y1: number, x2: number, y2: number, r: number`                    | Arc with two tangent points                                         |
+| `grect`         | `x: number, y: number, w: number, h: number`                                   | Rectangle path                                                      |
 
 ## Fill / Stroke
 
@@ -64,12 +64,12 @@ mismatch, or canvas not open).
 
 ## Text
 
-| Function      | Arguments           | Description                                                  |
-| ------------- | ------------------- | ------------------------------------------------------------ |
-| `gtext-font`  | `font: string`      | Set the font string (e.g. `"16px sans-serif"`)               |
-| `gtext-align` | `align: string`     | Set text alignment (`"left"` / `"center"` / `"right"` / ...) |
-| `gtext-line`  | `height: number`    | Set line height                                              |
-| `gtext-dire`  | `direction: string` | Set text direction (`"ltr"` / `"rtl"` / `"inherit"`)         |
+| Function      | Arguments           | Description                                                                  |
+| ------------- | ------------------- | ---------------------------------------------------------------------------- |
+| `gtext-font`  | `font: string`      | Set the font string (e.g. `"16px sans-serif"`)                               |
+| `gtext-align` | `align: string`     | Set text alignment (`"left"` / `"center"` / `"right"` / ...)                 |
+| `gtext-line`  | `baseline: string`  | Set text baseline (`"top"` / `"middle"` / `"alphabetic"` / `"bottom"` / ...) |
+| `gtext-dire`  | `direction: string` | Set text direction (`"ltr"` / `"rtl"` / `"inherit"`)                         |
 
 ## Transform
 
@@ -77,12 +77,20 @@ mismatch, or canvas not open).
 | ------------ | ---------------------- | ------------------------------- |
 | `gtranslate` | `x: number, y: number` | Translate the coordinate system |
 | `gscale`     | `x: number, y: number` | Scale the coordinate system     |
-| `grotate`    | `angle: number`        | Rotate by `angle` radians       |
+| `grotate`    | `angle: number`        | Rotate by `angle` degrees       |
+
+## State
+
+| Function   | Arguments | Description                                                      |
+| ---------- | --------- | ---------------------------------------------------------------- |
+| `gsave`    | —         | Push the current drawing state onto the state stack (`save`)     |
+| `grestore` | —         | Pop the last saved drawing state off the state stack (`restore`) |
 
 ## Image / Export
 
-| Function     | Arguments                           | Description                                   |
-| ------------ | ----------------------------------- | --------------------------------------------- |
-| `gimage`     | `src: string, x: number, y: number` | Draw an image loaded from `src` at (`x`, `y`) |
-| `gsave-png`  | `path: string`                      | Save the canvas as a PNG file to `path`       |
-| `gsave-jpeg` | `path: string`                      | Save the canvas as a JPEG file to `path`      |
+| Function     | Arguments                                                 | Description                                                                                                                            |
+| ------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `gimage`     | `src: string, x: number, y: number`                       | Draw an image loaded from `src` at (`x`, `y`) at its natural size                                                                      |
+| `gimage`     | `src: string, x: number, y: number, w: number, h: number` | Draw an image loaded from `src` at (`x`, `y`) scaled to `w` × `h`                                                                      |
+| `gsave-png`  | —                                                         | Trigger a browser download of the canvas as PNG (browser only; uses `toDataURL` + `<a download>`, not available on `OffscreenCanvas`)  |
+| `gsave-jpeg` | —                                                         | Trigger a browser download of the canvas as JPEG (browser only; uses `toDataURL` + `<a download>`, not available on `OffscreenCanvas`) |

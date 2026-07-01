@@ -14,6 +14,7 @@ gopen
 gpattern
 gquadcurve
 grect
+grestore
 grotate
 gsave
 gscale
