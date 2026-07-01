@@ -6,7 +6,7 @@ import { Cons, InterpretedSymbol, LispInterpreter, StreamManager } from 'kei-lis
 import { createGraphicsPlugin } from '../index.js';
 import { GraphicsPlugin } from './index.js';
 
-type FakeCtx = {
+type FakeContext = {
   fillStyle: string;
   strokeStyle: string;
   globalAlpha: number;
@@ -49,7 +49,7 @@ type FakeCtx = {
  * every member the plugin touches. happy-dom's HTMLCanvasElement.getContext
  * returns null, so each test installs this fake via `vi.spyOn`.
  */
-function makeFakeCtx(): FakeCtx {
+function makeFakeContext(): FakeContext {
   return {
     fillStyle: '',
     strokeStyle: '',
@@ -97,7 +97,7 @@ function makePlugin(): { canvas: HTMLCanvasElement; plugin: GraphicsPlugin } {
   canvas.width = 800;
   canvas.height = 600;
   vi.spyOn(canvas, 'getContext').mockReturnValue(
-    makeFakeCtx() as unknown as CanvasRenderingContext2D,
+    makeFakeContext() as unknown as CanvasRenderingContext2D,
   );
   const plugin = new GraphicsPlugin(canvas);
   return { canvas, plugin };
@@ -106,14 +106,14 @@ function makePlugin(): { canvas: HTMLCanvasElement; plugin: GraphicsPlugin } {
 /**
  * Builds a Lisp argument list (Cons) from JS values.
  */
-function args(...values: LispValue[]): Cons {
+function arguments_(...values: LispValue[]): Cons {
   if (values.length === 0) {
     return Cons.nil;
   }
   const head = new Cons(values[0]);
   let tail = head;
-  for (let i = 1; i < values.length; i++) {
-    tail.cdr = new Cons(values[i]);
+  for (let index = 1; index < values.length; index++) {
+    tail.cdr = new Cons(values[index]);
     tail = tail.cdr;
   }
   return head;
@@ -126,7 +126,7 @@ function args(...values: LispValue[]): Cons {
  * eval-capable stub so that tests exercising the host interpreter's
  * dispatch path do not collapse the context out from under it.
  */
-function makeCtx(): PluginContext {
+function makeContext(): PluginContext {
   const interpreter = new LispInterpreter();
   return {
     environment: interpreter.root,
@@ -169,13 +169,13 @@ describe('GraphicsPlugin', () => {
   describe('apply', () => {
     it('dispatches the symbol to its corresponding method', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       expect(result).toBe(InterpretedSymbol.of('t'));
     });
 
     it('returns nil for an unregistered symbol (legacy: prints + returns nil)', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('unknown-fn'), Cons.nil, makeCtx());
+      const result = plugin.apply(InterpretedSymbol.of('unknown-fn'), Cons.nil, makeContext());
       expect(result).toBe(Cons.nil);
     });
   });
@@ -194,13 +194,13 @@ describe('GraphicsPlugin', () => {
     });
   });
 
-  describe('_print', () => {
+  describe('#print (via closed-canvas path)', () => {
     it('writes the line plus a newline to process.stderr', () => {
       const { plugin } = makePlugin();
       const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
       try {
-        plugin._print('hello');
-        expect(spy).toHaveBeenCalledWith('hello\n');
+        plugin.gAlpha(arguments_(0));
+        expect(spy).toHaveBeenCalledWith('The canvas is closed and cannot be executed.\n');
       } finally {
         spy.mockRestore();
       }
@@ -210,20 +210,20 @@ describe('GraphicsPlugin', () => {
   describe('gOpen', () => {
     it('marks the plugin as open', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       expect(plugin.isOpen).toBe(true);
     });
 
     it('returns t on success', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       expect(result).toBe(InterpretedSymbol.of('t'));
     });
 
     it('returns nil when the canvas is already open (legacy: print + nil)', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      const second = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      const second = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       expect(second).toBe(Cons.nil);
     });
 
@@ -231,7 +231,7 @@ describe('GraphicsPlugin', () => {
       const { plugin } = makePlugin();
       const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
       try {
-        plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+        plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
         expect(spy).toHaveBeenCalledWith('canvas size, width : 600 height : 300\n');
       } finally {
         spy.mockRestore();
@@ -242,14 +242,14 @@ describe('GraphicsPlugin', () => {
   describe('gClose', () => {
     it('marks the plugin as closed', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('gclose'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('gclose'), Cons.nil, makeContext());
       expect(plugin.isOpen).toBe(false);
     });
 
     it('returns nil when the canvas is already closed', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('gclose'), Cons.nil, makeCtx());
+      const result = plugin.apply(InterpretedSymbol.of('gclose'), Cons.nil, makeContext());
       expect(result).toBe(Cons.nil);
     });
   });
@@ -257,16 +257,16 @@ describe('GraphicsPlugin', () => {
   describe('gClear', () => {
     it('paints the canvas white (legacy clear strategy)', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'fillRect');
       spy.mockClear();
-      plugin.apply(InterpretedSymbol.of('gclear'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gclear'), Cons.nil, makeContext());
       expect(spy).toHaveBeenCalledWith(0, 0, 800, 600);
     });
 
     it('returns nil when the canvas is not open', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('gclear'), Cons.nil, makeCtx());
+      const result = plugin.apply(InterpretedSymbol.of('gclear'), Cons.nil, makeContext());
       expect(result).toBe(Cons.nil);
     });
   });
@@ -274,16 +274,16 @@ describe('GraphicsPlugin', () => {
   describe('gMoveTo', () => {
     it('forwards x and y to ctx.moveTo', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'moveTo');
-      plugin.apply(InterpretedSymbol.of('gmove-to'), args(10, 20), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gmove-to'), arguments_(10, 20), makeContext());
       expect(spy).toHaveBeenCalledWith(10, 20);
     });
 
     it('returns nil on wrong arity (legacy: print + nil)', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      const result = plugin.apply(InterpretedSymbol.of('gmove-to'), args(10), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      const result = plugin.apply(InterpretedSymbol.of('gmove-to'), arguments_(10), makeContext());
       expect(result).toBe(Cons.nil);
     });
   });
@@ -291,16 +291,16 @@ describe('GraphicsPlugin', () => {
   describe('gLineTo', () => {
     it('forwards x and y to ctx.lineTo', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'lineTo');
-      plugin.apply(InterpretedSymbol.of('gline-to'), args(30, 40), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gline-to'), arguments_(30, 40), makeContext());
       expect(spy).toHaveBeenCalledWith(30, 40);
     });
 
     it('returns nil on wrong arity', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      const result = plugin.apply(InterpretedSymbol.of('gline-to'), args(30), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      const result = plugin.apply(InterpretedSymbol.of('gline-to'), arguments_(30), makeContext());
       expect(result).toBe(Cons.nil);
     });
   });
@@ -308,10 +308,10 @@ describe('GraphicsPlugin', () => {
   describe('gFillRect', () => {
     it('forwards x, y, w, h to ctx.fillRect', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'fillRect');
       spy.mockClear();
-      plugin.apply(InterpretedSymbol.of('gfill-rect'), args(10, 20, 100, 50), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gfill-rect'), arguments_(10, 20, 100, 50), makeContext());
       expect(spy).toHaveBeenCalledWith(10, 20, 100, 50);
     });
   });
@@ -319,16 +319,20 @@ describe('GraphicsPlugin', () => {
   describe('gFillText', () => {
     it('forwards text, x, y to ctx.fillText', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'fillText');
-      plugin.apply(InterpretedSymbol.of('gfill-text'), args('hello', 5, 15), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gfill-text'), arguments_('hello', 5, 15), makeContext());
       expect(spy).toHaveBeenCalledWith('hello', 5, 15);
     });
 
     it('returns nil when first argument is not a string', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      const result = plugin.apply(InterpretedSymbol.of('gfill-text'), args(42, 5, 15), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      const result = plugin.apply(
+        InterpretedSymbol.of('gfill-text'),
+        arguments_(42, 5, 15),
+        makeContext(),
+      );
       expect(result).toBe(Cons.nil);
     });
   });
@@ -336,9 +340,9 @@ describe('GraphicsPlugin', () => {
   describe('gArc', () => {
     it('converts degrees to radians and treats >= 0 flag as counter-clockwise', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'arc');
-      plugin.apply(InterpretedSymbol.of('garc'), args(50, 50, 25, 0, 180, 1), makeCtx());
+      plugin.apply(InterpretedSymbol.of('garc'), arguments_(50, 50, 25, 0, 180, 1), makeContext());
       expect(spy).toHaveBeenCalledWith(50, 50, 25, 0, Math.PI, true);
     });
   });
@@ -346,11 +350,15 @@ describe('GraphicsPlugin', () => {
   describe('gFillTri', () => {
     it('emits beginPath, moveTo, two lineTo, and fill', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const moveTo = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'moveTo');
       const lineTo = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'lineTo');
       const fill = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'fill');
-      plugin.apply(InterpretedSymbol.of('gfill-tri'), args(0, 0, 10, 0, 5, 10), makeCtx());
+      plugin.apply(
+        InterpretedSymbol.of('gfill-tri'),
+        arguments_(0, 0, 10, 0, 5, 10),
+        makeContext(),
+      );
       expect(moveTo).toHaveBeenCalledWith(0, 0);
       expect(lineTo.mock.calls).toEqual([
         [10, 0],
@@ -363,24 +371,24 @@ describe('GraphicsPlugin', () => {
   describe('gColor', () => {
     it('sets fillStyle from a string color', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('gcolor'), args('red'), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('gcolor'), arguments_('red'), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('red');
       expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('red');
     });
 
     it('accepts a 3-number RGB tuple', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('gcolor'), args(10, 20, 30), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('gcolor'), arguments_(10, 20, 30), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('rgb(10, 20, 30)');
       expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('rgb(10, 20, 30)');
     });
 
     it('accepts a 4-number RGBA tuple', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('gcolor'), args(10, 20, 30, 0.5), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('gcolor'), arguments_(10, 20, 30, 0.5), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('rgba(10, 20, 30, 0.5)');
       expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('rgba(10, 20, 30, 0.5)');
     });
@@ -389,9 +397,9 @@ describe('GraphicsPlugin', () => {
   describe('gFillColor', () => {
     it('sets fillStyle but leaves strokeStyle unchanged', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       (plugin.ctx as CanvasRenderingContext2D).strokeStyle = 'initial';
-      plugin.apply(InterpretedSymbol.of('gfill-color'), args('blue'), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gfill-color'), arguments_('blue'), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('blue');
       expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('initial');
     });
@@ -400,9 +408,9 @@ describe('GraphicsPlugin', () => {
   describe('gStrokeColor', () => {
     it('sets strokeStyle but leaves fillStyle unchanged', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       (plugin.ctx as CanvasRenderingContext2D).fillStyle = 'initial';
-      plugin.apply(InterpretedSymbol.of('gstroke-color'), args('green'), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gstroke-color'), arguments_('green'), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).strokeStyle).toBe('green');
       expect((plugin.ctx as CanvasRenderingContext2D).fillStyle).toBe('initial');
     });
@@ -411,22 +419,22 @@ describe('GraphicsPlugin', () => {
   describe('gAlpha', () => {
     it('clamps values below zero to zero', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('galpha'), args(-1), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('galpha'), arguments_(-1), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).globalAlpha).toBe(0);
     });
 
     it('passes through mid-range values unchanged', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('galpha'), args(0.5), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('galpha'), arguments_(0.5), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).globalAlpha).toBe(0.5);
     });
 
     it('clamps values above one to one', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('galpha'), args(5), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('galpha'), arguments_(5), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).globalAlpha).toBe(1);
     });
   });
@@ -434,22 +442,22 @@ describe('GraphicsPlugin', () => {
   describe('gLineCap', () => {
     it('maps zero to "butt"', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('gline-cap'), args(0), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('gline-cap'), arguments_(0), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).lineCap).toBe('butt');
     });
 
     it('maps a positive flag to "round"', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('gline-cap'), args(1), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('gline-cap'), arguments_(1), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).lineCap).toBe('round');
     });
 
     it('maps a negative flag to "square"', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('gline-cap'), args(-1), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('gline-cap'), arguments_(-1), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).lineCap).toBe('square');
     });
   });
@@ -457,8 +465,8 @@ describe('GraphicsPlugin', () => {
   describe('gShadowBlur', () => {
     it('preserves the legacy typo by writing ctx.Blur instead of ctx.shadowBlur', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
-      plugin.apply(InterpretedSymbol.of('gshadow-blur'), args(8), makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('gshadow-blur'), arguments_(8), makeContext());
       expect((plugin.ctx as unknown as { Blur: number }).Blur).toBe(8);
     });
   });
@@ -466,18 +474,22 @@ describe('GraphicsPlugin', () => {
   describe('gStrokeText', () => {
     it('calls ctx.strokeText with the correct arguments', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'strokeText');
-      plugin.apply(InterpretedSymbol.of('gstroke-text'), args('hello', 10, 20), makeCtx());
+      plugin.apply(
+        InterpretedSymbol.of('gstroke-text'),
+        arguments_('hello', 10, 20),
+        makeContext(),
+      );
       expect(spy).toHaveBeenCalledWith('hello', 10, 20);
     });
 
     it('preserves the legacy typo by emitting "Can not draw fill text." on failure', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
       try {
-        plugin.apply(InterpretedSymbol.of('gstroke-text'), args(10, 20), makeCtx());
+        plugin.apply(InterpretedSymbol.of('gstroke-text'), arguments_(10, 20), makeContext());
         expect(spy).toHaveBeenCalledWith('Can not draw fill text.\n');
       } finally {
         spy.mockRestore();
@@ -488,9 +500,9 @@ describe('GraphicsPlugin', () => {
   describe('gRotate', () => {
     it('converts degrees to radians before calling ctx.rotate', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'rotate');
-      plugin.apply(InterpretedSymbol.of('grotate'), args(90), makeCtx());
+      plugin.apply(InterpretedSymbol.of('grotate'), arguments_(90), makeContext());
       expect(spy).toHaveBeenCalledWith(Math.PI / 2);
     });
   });
@@ -498,17 +510,17 @@ describe('GraphicsPlugin', () => {
   describe('selectColor', () => {
     it('returns a string argument verbatim', () => {
       const { plugin } = makePlugin();
-      expect(plugin.selectColor(args('navy'))).toBe('navy');
+      expect(plugin.selectColor(arguments_('navy'))).toBe('navy');
     });
 
     it('formats a 3-number tuple as rgb(...)', () => {
       const { plugin } = makePlugin();
-      expect(plugin.selectColor(args(1, 2, 3))).toBe('rgb(1, 2, 3)');
+      expect(plugin.selectColor(arguments_(1, 2, 3))).toBe('rgb(1, 2, 3)');
     });
 
     it('formats a 4-number tuple as rgba(...)', () => {
       const { plugin } = makePlugin();
-      expect(plugin.selectColor(args(1, 2, 3, 0.5))).toBe('rgba(1, 2, 3, 0.5)');
+      expect(plugin.selectColor(arguments_(1, 2, 3, 0.5))).toBe('rgba(1, 2, 3, 0.5)');
     });
 
     it('returns "black" for zero arguments', () => {
@@ -518,45 +530,45 @@ describe('GraphicsPlugin', () => {
 
     it('returns "black" for unrecognized arity (2 args)', () => {
       const { plugin } = makePlugin();
-      expect(plugin.selectColor(args(1, 2))).toBe('black');
+      expect(plugin.selectColor(arguments_(1, 2))).toBe('black');
     });
 
     it('returns "black" when a 3-element tuple contains a non-number', () => {
       const { plugin } = makePlugin();
-      expect(plugin.selectColor(args(1, 'two', 3))).toBe('black');
+      expect(plugin.selectColor(arguments_(1, 'two', 3))).toBe('black');
     });
   });
 
   describe('gImage', () => {
     it('returns t for a valid 3-arg call', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const result = plugin.apply(
         InterpretedSymbol.of('gimage'),
-        args('http://example.test/img.png', 10, 20),
-        makeCtx(),
+        arguments_('https://example.test/img.png', 10, 20),
+        makeContext(),
       );
       expect(result).toBe(InterpretedSymbol.of('t'));
     });
 
     it('returns t for a valid 5-arg call', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const result = plugin.apply(
         InterpretedSymbol.of('gimage'),
-        args('http://example.test/img.png', 10, 20, 100, 80),
-        makeCtx(),
+        arguments_('https://example.test/img.png', 10, 20, 100, 80),
+        makeContext(),
       );
       expect(result).toBe(InterpretedSymbol.of('t'));
     });
 
     it('returns nil for wrong arity', () => {
       const { plugin } = makePlugin();
-      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const result = plugin.apply(
         InterpretedSymbol.of('gimage'),
-        args('http://example.test/img.png', 10),
-        makeCtx(),
+        arguments_('https://example.test/img.png', 10),
+        makeContext(),
       );
       expect(result).toBe(Cons.nil);
     });
@@ -567,7 +579,7 @@ describe('GraphicsPlugin', () => {
       const canvas = document.createElement('canvas');
       vi.spyOn(canvas, 'getContext').mockReturnValue(null);
       const plugin = new GraphicsPlugin(canvas);
-      const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+      const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       expect(result).toBe(Cons.nil);
     });
   });
@@ -582,7 +594,7 @@ describe('GraphicsPlugin', () => {
       canvas.width = 200;
       canvas.height = 100;
       vi.spyOn(canvas, 'getContext').mockReturnValue(
-        makeFakeCtx() as unknown as CanvasRenderingContext2D,
+        makeFakeContext() as unknown as CanvasRenderingContext2D,
       );
       plugin = new GraphicsPlugin(canvas);
       fillRect = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'fillRect');
@@ -607,7 +619,7 @@ describe('createGraphicsPlugin', () => {
   it('returns a GraphicsPlugin bound to the provided canvas', () => {
     const canvas = document.createElement('canvas');
     vi.spyOn(canvas, 'getContext').mockReturnValue(
-      makeFakeCtx() as unknown as CanvasRenderingContext2D,
+      makeFakeContext() as unknown as CanvasRenderingContext2D,
     );
     const plugin = createGraphicsPlugin({ canvas });
     expect(plugin).toBeInstanceOf(GraphicsPlugin);
@@ -617,10 +629,10 @@ describe('createGraphicsPlugin', () => {
   it('produces a plugin that responds to gopen', () => {
     const canvas = document.createElement('canvas');
     vi.spyOn(canvas, 'getContext').mockReturnValue(
-      makeFakeCtx() as unknown as CanvasRenderingContext2D,
+      makeFakeContext() as unknown as CanvasRenderingContext2D,
     );
     const plugin = createGraphicsPlugin({ canvas });
-    const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeCtx());
+    const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
     expect(result).toBe(InterpretedSymbol.of('t'));
   });
 });

@@ -27,1225 +27,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   static readonly buildInFunctions: Map<InterpretedSymbol, string> = GraphicsPlugin.setup();
 
   /**
-   * Plugin identifier, used for diagnostics.
-   */
-  readonly name: string = 'graphics';
-
-  canvas: HTMLCanvasElement | OffscreenCanvas;
-  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-  isOpen: boolean;
-
-  /**
-   * Constructor.
-   * @constructor
-   * @param canvas - the canvas to draw to
-   */
-  constructor(canvas: HTMLCanvasElement | OffscreenCanvas) {
-    super();
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.isOpen = false;
-  }
-
-  /**
-   * Returns true if this plugin handles the given symbol.
-   * @param aSymbol - the call symbol
-   * @return true if `apply` should be called
-   */
-  has(aSymbol: InterpretedSymbol): boolean {
-    return GraphicsPlugin.buildInFunctions.has(aSymbol);
-  }
-
-  /**
-   * Dispatches the given symbol to the matching `g…` method.
-   * @param aSymbol - the call symbol
-   * @param args - the evaluated argument list
-   * @param _ctx - the interpreter context (unused by this plugin)
-   * @return the method's result, or `Cons.nil` if dispatch fails
-   */
-  apply(aSymbol: InterpretedSymbol, args: Cons, _ctx: PluginContext): LispValue {
-    return this.selectProcedure(aSymbol, args);
-  }
-
-  /**
-   * Resolves the procedure name and invokes the matching method.
-   * @param procedure - the Lisp symbol
-   * @param args - the evaluated argument list
-   * @return the method's result, or `Cons.nil` if not registered
-   */
-  selectProcedure(procedure: InterpretedSymbol, args: Cons): LispValue {
-    if (GraphicsPlugin.buildInFunctions.has(procedure)) {
-      return this.buildInFunction(procedure, args);
-    }
-    this._print(`I could find no procedure description for ${String(procedure)}`);
-    return Cons.nil;
-  }
-
-  /**
-   * Looks up and invokes the JS method that implements the given Lisp symbol.
-   * Throws `TypeError` when the dispatch table points to a method that does
-   * not exist on the instance — this matches the legacy behavior, where the
-   * Ramda `R.invoker(1, methodName)(args, this)` call would surface the same
-   * error by attempting to call `undefined`.
-   * @param procedure - the Lisp symbol
-   * @param args - the evaluated argument list
-   * @return the method's result
-   */
-  buildInFunction(procedure: InterpretedSymbol, args: Cons): LispValue {
-    const methodName = GraphicsPlugin.buildInFunctions.get(procedure) as string;
-    const target = this as unknown as Record<string, unknown>;
-    const method = target[methodName];
-    if (typeof method !== 'function') {
-      throw new TypeError(`${this.constructor.name} does not have a method named "${methodName}"`);
-    }
-    return (method as (args: Cons) => LispValue).call(this, args);
-  }
-
-  /**
-   * Checks whether the canvas exposes a usable 2D context, and narrows
-   * `this.ctx` to non-null for the caller when it returns true.
-   * @return type predicate — true when ctx is non-null
-   */
-  checkSupport(): this is GraphicsPlugin & {
-    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-  } {
-    if (this.ctx === null) {
-      this._print('Unable to initialize canvas. The browser or machine may not support it.');
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * Writes a diagnostic line directly to `process.stderr`, matching the
-   * convention used by kei-lisp itself (`Applier.format` writes to
-   * `process.stdout`). In a Node runtime this hits the real stderr; in a
-   * browser kei-lisp host (e.g. kei-lisp-web) the host typically swaps
-   * `process.stderr.write` for a sink that routes to the REPL output panel,
-   * so the same call reaches the user via the host's normal output channel.
-   * @param line - the line to write
-   */
-  _print(line: string): void {
-    process.stderr.write(line + '\n');
-  }
-
-  gAlpha(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1 && Cons.isNumber(args.car)) {
-          const aNumber = args.car <= 0 ? 0 : args.car >= 1 ? 1 : args.car;
-          this.ctx.globalAlpha = aNumber;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set alpha.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set alpha.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gArc(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 6) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          const cdr5 = cdr4.cdr as Cons;
-          const a5 = cdr5.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4) &&
-            Cons.isNumber(a5)
-          ) {
-            const aFlag = a5 >= 0;
-            this.ctx.arc(a0, a1, a2, (Math.PI / 180) * a3, (Math.PI / 180) * a4, aFlag);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw arc.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw arc.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gArcTo(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 5) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4)
-          ) {
-            this.ctx.arcTo(a0, a1, a2, a3, a4);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw arc to.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw arc to.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gBezCurveTo(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 6) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          const cdr5 = cdr4.cdr as Cons;
-          const a5 = cdr5.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4) &&
-            Cons.isNumber(a5)
-          ) {
-            this.ctx.bezierCurveTo(a0, a1, a2, a3, a4, a5);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw bezier curve.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw bezier curve.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gClear(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.fillStyle = '#000000';
-        this.ctx.save();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this._print('Can not clear.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gClose(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.isOpen = false;
-        return InterpretedSymbol.of('t');
-      } catch {
-        this._print('Can not close.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas has already been closed.');
-    return Cons.nil;
-  }
-
-  gColor(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() >= 1) {
-          const aColor = this.selectColor(args);
-          this.ctx.fillStyle = aColor;
-          this.ctx.strokeStyle = aColor;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set color.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set color.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gFill(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.fill();
-        this.ctx.save();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this._print('Can not fill.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gFillColor(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() >= 1) {
-          const aColor = this.selectColor(args);
-          this.ctx.fillStyle = aColor;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set fill color.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set fill color.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gFillRect(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 4) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.fillRect(a0, a1, a2, a3);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw fill rectangle.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw fill rectangle.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gFillText(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 3) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
-            this.ctx.fillText(a0, a1, a2);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw fill text.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw fill text.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gFillTri(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 6) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          const cdr5 = cdr4.cdr as Cons;
-          const a5 = cdr5.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4) &&
-            Cons.isNumber(a5)
-          ) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(a0, a1);
-            this.ctx.lineTo(a2, a3);
-            this.ctx.lineTo(a4, a5);
-            this.ctx.fill();
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw fill triangle.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw fill triangle.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gFinishPath(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.closePath();
-        this.ctx.save();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this._print('Can not finish path.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gImage(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        const len = args.length();
-        if (len === 3) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
-            const ctx = this.ctx;
-            const anImage = new Image();
-            anImage.src = a0;
-            anImage.onload = () => {
-              ctx.drawImage(anImage, a1, a2);
-            };
-            ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        } else if (len === 5) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          if (
-            Cons.isString(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4)
-          ) {
-            const ctx = this.ctx;
-            const anImage = new Image();
-            anImage.src = a0;
-            anImage.onload = () => {
-              ctx.drawImage(anImage, a1, a2, a3, a4);
-            };
-            ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw Image.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw Image.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gLineTo(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 2) {
-          const a0 = args.car;
-          const a1 = (args.cdr as Cons).car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.lineTo(a0, a1);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw line to');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw line to');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gLineCap(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1 && Cons.isNumber(args.car)) {
-          const aString = args.car === 0 ? 'butt' : args.car > 0 ? 'round' : 'square';
-          this.ctx.lineCap = aString;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set line cap.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set line cap.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gLineJoin(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1 && Cons.isNumber(args.car)) {
-          const aString = args.car === 0 ? 'miter' : args.car > 0 ? 'round' : 'bevel';
-          this.ctx.lineJoin = aString;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set line join.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set line join.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gLineWidth(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1 && Cons.isNumber(args.car)) {
-          const aNumber = args.car <= 0 ? 1 : args.car;
-          this.ctx.lineWidth = aNumber;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set line width.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set line width.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gMoveTo(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 2) {
-          const a0 = args.car;
-          const a1 = (args.cdr as Cons).car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.moveTo(a0, a1);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not move');
-        return Cons.nil;
-      } catch {
-        this._print('Can not move');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gOpen(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (!this.isOpen) {
-      try {
-        this.isOpen = true;
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.fillStyle = '#000000';
-        this.ctx.save();
-        this._print('canvas size, width : 600 height : 300');
-        return InterpretedSymbol.of('t');
-      } catch {
-        this._print('Can not open.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas has already been opened.');
-    return Cons.nil;
-  }
-
-  gPattern(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 2) {
-          const a0 = args.car;
-          const a1 = (args.cdr as Cons).car;
-          if (Cons.isString(a0) && Cons.isNumber(a1)) {
-            const aString = a1 === 0 ? 'repeat' : a1 > 0 ? 'repeat-x' : 'repeat-y';
-            const ctx = this.ctx;
-            const anImage = new Image();
-            anImage.src = a0;
-            anImage.onload = () => {
-              // Legacy bug: createPattern() may return null; assigning null to fillStyle
-              // is a no-op in practice (browsers ignore or coerce it).
-              ctx.fillStyle = ctx.createPattern(anImage, aString) as CanvasPattern;
-            };
-            ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not set pattern.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set pattern.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gQuadCurveTo(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 4) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.quadraticCurveTo(a0, a1, a2, a3);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw quadratic curve.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw quadratic curve.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gSaveJpeg(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        const anImage = new Image();
-        anImage.crossOrigin = 'Anonymous';
-        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
-        anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/jpeg');
-        const link = document.createElement('a');
-        link.href = anImage.src;
-        link.download = 'canvas';
-        document.body.append(link);
-        link.click();
-        link.remove();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this._print(
-          "Can not save jpeg.  If you are using an image in the canvas, you can't save jpeg.",
-        );
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gSavePng(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        const anImage = new Image();
-        anImage.crossOrigin = 'Anonymous';
-        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
-        anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/png');
-        const link = document.createElement('a');
-        link.href = anImage.src;
-        link.download = 'canvas';
-        document.body.append(link);
-        link.click();
-        link.remove();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this._print(
-          "Can not save png. If you are using an image in the canvas, you can't save png.",
-        );
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gScale(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 2) {
-          const a0 = args.car;
-          const a1 = (args.cdr as Cons).car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.scale(a0, a1);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not scale.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not scale.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gShadowBlur(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      if (args.length() === 1 && Cons.isNumber(args.car)) {
-        // Legacy: writes to ctx.Blur (typo) rather than ctx.shadowBlur.
-        // Preserved verbatim from the original Graphist.js.
-        (this.ctx as unknown as { Blur: number }).Blur = args.car;
-        this.ctx.save();
-        return InterpretedSymbol.of('t');
-      }
-      this._print('Can not set shadow blur.');
-      return Cons.nil;
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gShadowColor(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1) {
-          const aColor = this.selectColor(args);
-          this.ctx.shadowColor = aColor;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set shadow color.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set shadow color.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  // NOTE: gShadowOffsetX, gShadowOffsetY, and gShadowBlur intentionally omit try/catch.
-  // The original Graphist.js had the same structure for all three shadow-property setters.
-  gShadowOffsetX(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      if (args.length() === 1 && Cons.isNumber(args.car)) {
-        this.ctx.shadowOffsetX = args.car;
-        this.ctx.save();
-        return InterpretedSymbol.of('t');
-      }
-      this._print('Can not set shadow offsetX.');
-      return Cons.nil;
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gShadowOffsetY(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      if (args.length() === 1 && Cons.isNumber(args.car)) {
-        this.ctx.shadowOffsetY = args.car;
-        this.ctx.save();
-        return InterpretedSymbol.of('t');
-      }
-      this._print('Can not set shadow offsetY.');
-      return Cons.nil;
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gSleep(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      const sleep = (ms: number): void => {
-        const time = Date.now() + ms;
-        while (Date.now() < time) {
-          // busy wait
-        }
-      };
-      if (args.length() === 1 && Cons.isNumber(args.car)) {
-        sleep(args.car);
-        return InterpretedSymbol.of('t');
-      }
-      this._print('Can not sleep');
-      return Cons.nil;
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gStartPath(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.beginPath();
-        this.ctx.save();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this._print('Can not start path.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gStroke(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.stroke();
-        this.ctx.save();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this._print('Can not stroke.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gStrokeColor(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() >= 1) {
-          const aColor = this.selectColor(args);
-          this.ctx.strokeStyle = aColor;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set stroke color');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set stroke color');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gStrokeRect(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 4) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.strokeRect(a0, a1, a2, a3);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw stroke rectangle.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw stroke rectangle.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gStrokeText(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 3) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
-            this.ctx.strokeText(a0, a1, a2);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        // Legacy typo: message says 'fill text' but this method strokes. Preserved from the
-        // original Graphist.js.
-        this._print('Can not draw fill text.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw fill text.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gStrokeTri(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 6) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          const cdr5 = cdr4.cdr as Cons;
-          const a5 = cdr5.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4) &&
-            Cons.isNumber(a5)
-          ) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(a0, a1);
-            this.ctx.lineTo(a2, a3);
-            this.ctx.lineTo(a4, a5);
-            this.ctx.closePath();
-            this.ctx.stroke();
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw stroke triangle.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw stroke triangle.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gTextAlign(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1 && Cons.isString(args.car)) {
-          this.ctx.textAlign = args.car as CanvasTextAlign;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set text align.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set text align.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gTextBaseline(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1 && Cons.isString(args.car)) {
-          this.ctx.textBaseline = args.car as CanvasTextBaseline;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set text baseline.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set text baseline.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gTextDirection(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1 && Cons.isNumber(args.car)) {
-          const aString = args.car === 0 ? 'inherit' : args.car > 0 ? 'rtl' : 'ltr';
-          this.ctx.direction = aString;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set text direction.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set text direction.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gTextFont(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1 && Cons.isString(args.car)) {
-          this.ctx.font = args.car;
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not set text font.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not set text font.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gTranslate(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 2) {
-          const a0 = args.car;
-          const a1 = (args.cdr as Cons).car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.translate(a0, a1);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not translate.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not translate.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gRect(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 4) {
-          const a0 = args.car;
-          const cdr1 = args.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.rect(a0, a1, a2, a3);
-            this.ctx.save();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this._print('Can not draw rectangle.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not draw rectangle.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  gRotate(args: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (args.length() === 1 && Cons.isNumber(args.car)) {
-          this.ctx.rotate((Math.PI / 180) * args.car);
-          this.ctx.save();
-          return InterpretedSymbol.of('t');
-        }
-        this._print('Can not rotate.');
-        return Cons.nil;
-      } catch {
-        this._print('Can not rotate.');
-        return Cons.nil;
-      }
-    }
-    this._print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
-  }
-
-  /**
-   * Parses a color spec from the head of the argument Cons. Accepts
-   * (1 string), (3 numbers — rgb), or (4 numbers — rgba); falls back to
-   * `'black'` on anything else (legacy behavior).
-   * @param args - the argument Cons to parse
-   * @return CSS color string
-   */
-  selectColor(args: Cons): string {
-    let aColor = 'black';
-    const len = args.length();
-    const a0 = args.car;
-    if (len === 1 && Cons.isString(a0)) {
-      aColor = a0;
-    } else if (len === 3) {
-      const cdr1 = args.cdr as Cons;
-      const a1 = cdr1.car;
-      const cdr2 = cdr1.cdr as Cons;
-      const a2 = cdr2.car;
-      if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
-        aColor = `rgb(${a0}, ${a1}, ${a2})`;
-      } else {
-        this._print('Can not set color. set color "black".');
-      }
-    } else if (len === 4) {
-      const cdr1 = args.cdr as Cons;
-      const a1 = cdr1.car;
-      const cdr2 = cdr1.cdr as Cons;
-      const a2 = cdr2.car;
-      const cdr3 = cdr2.cdr as Cons;
-      const a3 = cdr3.car;
-      if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-        aColor = `rgba(${a0}, ${a1}, ${a2}, ${a3})`;
-      } else {
-        this._print('Can not set color. set color "black".');
-      }
-    } else {
-      this._print('Can not set color. set color "black".');
-    }
-    return aColor;
-  }
-
-  /**
    * Builds the dispatch table.
    * @return the dispatch table
    */
@@ -1295,5 +76,1224 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     aTable.set(InterpretedSymbol.of('grect'), 'gRect');
     aTable.set(InterpretedSymbol.of('grotate'), 'gRotate');
     return aTable;
+  }
+
+  /**
+   * Plugin identifier, used for diagnostics.
+   */
+  readonly name: string = 'graphics';
+
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  isOpen: boolean;
+
+  /**
+   * Constructor.
+   * @constructor
+   * @param canvas - the canvas to draw to
+   */
+  constructor(canvas: HTMLCanvasElement | OffscreenCanvas) {
+    super();
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.isOpen = false;
+  }
+
+  /**
+   * Writes a diagnostic line directly to `process.stderr`, matching the
+   * convention used by kei-lisp itself (`Applier.format` writes to
+   * `process.stdout`). In a Node runtime this hits the real stderr; in a
+   * browser kei-lisp host (e.g. kei-lisp-web) the host typically swaps
+   * `process.stderr.write` for a sink that routes to the REPL output panel,
+   * so the same call reaches the user via the host's normal output channel.
+   * @param line - the line to write
+   */
+  #print(line: string): void {
+    process.stderr.write(line + '\n');
+  }
+
+  /**
+   * Returns true if this plugin handles the given symbol.
+   * @param aSymbol - the call symbol
+   * @return true if `apply` should be called
+   */
+  has(aSymbol: InterpretedSymbol): boolean {
+    return GraphicsPlugin.buildInFunctions.has(aSymbol);
+  }
+
+  /**
+   * Dispatches the given symbol to the matching `g…` method.
+   * @param aSymbol - the call symbol
+   * @param args - the evaluated argument list
+   * @param _ctx - the interpreter context (unused by this plugin)
+   * @return the method's result, or `Cons.nil` if dispatch fails
+   */
+  apply(aSymbol: InterpretedSymbol, arguments_: Cons, _context: PluginContext): LispValue {
+    return this.selectProcedure(aSymbol, arguments_);
+  }
+
+  /**
+   * Resolves the procedure name and invokes the matching method.
+   * @param procedure - the Lisp symbol
+   * @param args - the evaluated argument list
+   * @return the method's result, or `Cons.nil` if not registered
+   */
+  selectProcedure(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
+    if (GraphicsPlugin.buildInFunctions.has(procedure)) {
+      return this.buildInFunction(procedure, arguments_);
+    }
+    this.#print(`I could find no procedure description for ${String(procedure)}`);
+    return Cons.nil;
+  }
+
+  /**
+   * Looks up and invokes the JS method that implements the given Lisp symbol.
+   * Throws `TypeError` when the dispatch table points to a method that does
+   * not exist on the instance — this matches the legacy behavior, where the
+   * Ramda `R.invoker(1, methodName)(args, this)` call would surface the same
+   * error by attempting to call `undefined`.
+   * @param procedure - the Lisp symbol
+   * @param args - the evaluated argument list
+   * @return the method's result
+   */
+  buildInFunction(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
+    const methodName = GraphicsPlugin.buildInFunctions.get(procedure) as string;
+    const target = this as unknown as Record<string, unknown>;
+    const method = target[methodName];
+    if (typeof method !== 'function') {
+      throw new TypeError(`${this.constructor.name} does not have a method named "${methodName}"`);
+    }
+    return (method as (arguments__: Cons) => LispValue).call(this, arguments_);
+  }
+
+  /**
+   * Checks whether the canvas exposes a usable 2D context, and narrows
+   * `this.ctx` to non-null for the caller when it returns true.
+   * @return type predicate — true when ctx is non-null
+   */
+  checkSupport(): this is GraphicsPlugin & {
+    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+  } {
+    if (this.ctx === null) {
+      this.#print('Unable to initialize canvas. The browser or machine may not support it.');
+      return false;
+    }
+    return true;
+  }
+
+  gAlpha(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+          const aNumber = arguments_.car <= 0 ? 0 : arguments_.car >= 1 ? 1 : arguments_.car;
+          this.ctx.globalAlpha = aNumber;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set alpha.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set alpha.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gArc(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 6) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          const cdr5 = cdr4.cdr as Cons;
+          const a5 = cdr5.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4) &&
+            Cons.isNumber(a5)
+          ) {
+            const isAFlag = a5 >= 0;
+            this.ctx.arc(a0, a1, a2, (Math.PI / 180) * a3, (Math.PI / 180) * a4, isAFlag);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw arc.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw arc.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gArcTo(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 5) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4)
+          ) {
+            this.ctx.arcTo(a0, a1, a2, a3, a4);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw arc to.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw arc to.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gBezCurveTo(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 6) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          const cdr5 = cdr4.cdr as Cons;
+          const a5 = cdr5.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4) &&
+            Cons.isNumber(a5)
+          ) {
+            this.ctx.bezierCurveTo(a0, a1, a2, a3, a4, a5);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw bezier curve.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw bezier curve.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gClear(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillStyle = '#000000';
+        this.ctx.save();
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print('Can not clear.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gClose(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.isOpen = false;
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print('Can not close.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas has already been closed.');
+    return Cons.nil;
+  }
+
+  gColor(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() >= 1) {
+          const aColor = this.selectColor(arguments_);
+          this.ctx.fillStyle = aColor;
+          this.ctx.strokeStyle = aColor;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set color.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set color.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gFill(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        this.ctx.fill();
+        this.ctx.save();
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print('Can not fill.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gFillColor(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() >= 1) {
+          const aColor = this.selectColor(arguments_);
+          this.ctx.fillStyle = aColor;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set fill color.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set fill color.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gFillRect(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 4) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+            this.ctx.fillRect(a0, a1, a2, a3);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw fill rectangle.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw fill rectangle.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gFillText(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 3) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
+            this.ctx.fillText(a0, a1, a2);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw fill text.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw fill text.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gFillTri(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 6) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          const cdr5 = cdr4.cdr as Cons;
+          const a5 = cdr5.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4) &&
+            Cons.isNumber(a5)
+          ) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(a0, a1);
+            this.ctx.lineTo(a2, a3);
+            this.ctx.lineTo(a4, a5);
+            this.ctx.fill();
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw fill triangle.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw fill triangle.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gFinishPath(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        this.ctx.closePath();
+        this.ctx.save();
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print('Can not finish path.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gImage(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        const length_ = arguments_.length();
+        if (length_ === 3) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
+            const context = this.ctx;
+            const anImage = new Image();
+            anImage.src = a0;
+            anImage.onload = () => {
+              context.drawImage(anImage, a1, a2);
+            };
+            context.save();
+            return InterpretedSymbol.of('t');
+          }
+        } else if (length_ === 5) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          if (
+            Cons.isString(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4)
+          ) {
+            const context = this.ctx;
+            const anImage = new Image();
+            anImage.src = a0;
+            anImage.onload = () => {
+              context.drawImage(anImage, a1, a2, a3, a4);
+            };
+            context.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw Image.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw Image.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gLineTo(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 2) {
+          const a0 = arguments_.car;
+          const a1 = (arguments_.cdr as Cons).car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
+            this.ctx.lineTo(a0, a1);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw line to');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw line to');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gLineCap(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+          const aString = arguments_.car === 0 ? 'butt' : arguments_.car > 0 ? 'round' : 'square';
+          this.ctx.lineCap = aString;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set line cap.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set line cap.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gLineJoin(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+          const aString = arguments_.car === 0 ? 'miter' : arguments_.car > 0 ? 'round' : 'bevel';
+          this.ctx.lineJoin = aString;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set line join.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set line join.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gLineWidth(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+          const aNumber = arguments_.car <= 0 ? 1 : arguments_.car;
+          this.ctx.lineWidth = aNumber;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set line width.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set line width.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gMoveTo(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 2) {
+          const a0 = arguments_.car;
+          const a1 = (arguments_.cdr as Cons).car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
+            this.ctx.moveTo(a0, a1);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not move');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not move');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gOpen(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (!this.isOpen) {
+      try {
+        this.isOpen = true;
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillStyle = '#000000';
+        this.ctx.save();
+        this.#print('canvas size, width : 600 height : 300');
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print('Can not open.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas has already been opened.');
+    return Cons.nil;
+  }
+
+  gPattern(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 2) {
+          const a0 = arguments_.car;
+          const a1 = (arguments_.cdr as Cons).car;
+          if (Cons.isString(a0) && Cons.isNumber(a1)) {
+            const aString = a1 === 0 ? 'repeat' : a1 > 0 ? 'repeat-x' : 'repeat-y';
+            const context = this.ctx;
+            const anImage = new Image();
+            anImage.src = a0;
+            anImage.onload = () => {
+              // Legacy bug: createPattern() may return null; assigning null to fillStyle
+              // is a no-op in practice (browsers ignore or coerce it).
+              context.fillStyle = context.createPattern(anImage, aString) as CanvasPattern;
+            };
+            context.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not set pattern.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set pattern.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gQuadCurveTo(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 4) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+            this.ctx.quadraticCurveTo(a0, a1, a2, a3);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw quadratic curve.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw quadratic curve.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gSaveJpeg(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        const anImage = new Image();
+        anImage.crossOrigin = 'Anonymous';
+        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
+        anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/jpeg');
+        const link = document.createElement('a');
+        link.href = anImage.src;
+        link.download = 'canvas';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print(
+          "Can not save jpeg.  If you are using an image in the canvas, you can't save jpeg.",
+        );
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gSavePng(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        const anImage = new Image();
+        anImage.crossOrigin = 'Anonymous';
+        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
+        anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = anImage.src;
+        link.download = 'canvas';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print(
+          "Can not save png. If you are using an image in the canvas, you can't save png.",
+        );
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gScale(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 2) {
+          const a0 = arguments_.car;
+          const a1 = (arguments_.cdr as Cons).car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
+            this.ctx.scale(a0, a1);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not scale.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not scale.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gShadowBlur(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+        // Legacy: writes to ctx.Blur (typo) rather than ctx.shadowBlur.
+        // Preserved verbatim from the original Graphist.js.
+        (this.ctx as unknown as { Blur: number }).Blur = arguments_.car;
+        this.ctx.save();
+        return InterpretedSymbol.of('t');
+      }
+      this.#print('Can not set shadow blur.');
+      return Cons.nil;
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gShadowColor(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1) {
+          const aColor = this.selectColor(arguments_);
+          this.ctx.shadowColor = aColor;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set shadow color.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set shadow color.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  // NOTE: gShadowOffsetX, gShadowOffsetY, and gShadowBlur intentionally omit try/catch.
+  // The original Graphist.js had the same structure for all three shadow-property setters.
+  gShadowOffsetX(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+        this.ctx.shadowOffsetX = arguments_.car;
+        this.ctx.save();
+        return InterpretedSymbol.of('t');
+      }
+      this.#print('Can not set shadow offsetX.');
+      return Cons.nil;
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gShadowOffsetY(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+        this.ctx.shadowOffsetY = arguments_.car;
+        this.ctx.save();
+        return InterpretedSymbol.of('t');
+      }
+      this.#print('Can not set shadow offsetY.');
+      return Cons.nil;
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gSleep(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      const sleep = (ms: number): void => {
+        const time = Date.now() + ms;
+        while (Date.now() < time) {
+          // busy wait
+        }
+      };
+      if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+        sleep(arguments_.car);
+        return InterpretedSymbol.of('t');
+      }
+      this.#print('Can not sleep');
+      return Cons.nil;
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gStartPath(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        this.ctx.beginPath();
+        this.ctx.save();
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print('Can not start path.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gStroke(): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        this.ctx.stroke();
+        this.ctx.save();
+        return InterpretedSymbol.of('t');
+      } catch {
+        this.#print('Can not stroke.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gStrokeColor(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() >= 1) {
+          const aColor = this.selectColor(arguments_);
+          this.ctx.strokeStyle = aColor;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set stroke color');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set stroke color');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gStrokeRect(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 4) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+            this.ctx.strokeRect(a0, a1, a2, a3);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw stroke rectangle.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw stroke rectangle.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gStrokeText(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 3) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
+            this.ctx.strokeText(a0, a1, a2);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        // Legacy typo: message says 'fill text' but this method strokes. Preserved from the
+        // original Graphist.js.
+        this.#print('Can not draw fill text.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw fill text.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gStrokeTri(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 6) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          const cdr4 = cdr3.cdr as Cons;
+          const a4 = cdr4.car;
+          const cdr5 = cdr4.cdr as Cons;
+          const a5 = cdr5.car;
+          if (
+            Cons.isNumber(a0) &&
+            Cons.isNumber(a1) &&
+            Cons.isNumber(a2) &&
+            Cons.isNumber(a3) &&
+            Cons.isNumber(a4) &&
+            Cons.isNumber(a5)
+          ) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(a0, a1);
+            this.ctx.lineTo(a2, a3);
+            this.ctx.lineTo(a4, a5);
+            this.ctx.closePath();
+            this.ctx.stroke();
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw stroke triangle.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw stroke triangle.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gTextAlign(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
+          this.ctx.textAlign = arguments_.car as CanvasTextAlign;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set text align.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set text align.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gTextBaseline(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
+          this.ctx.textBaseline = arguments_.car as CanvasTextBaseline;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set text baseline.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set text baseline.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gTextDirection(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+          const aString = arguments_.car === 0 ? 'inherit' : arguments_.car > 0 ? 'rtl' : 'ltr';
+          this.ctx.direction = aString;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set text direction.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set text direction.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gTextFont(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
+          this.ctx.font = arguments_.car;
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not set text font.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not set text font.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gTranslate(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 2) {
+          const a0 = arguments_.car;
+          const a1 = (arguments_.cdr as Cons).car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
+            this.ctx.translate(a0, a1);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not translate.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not translate.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gRect(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 4) {
+          const a0 = arguments_.car;
+          const cdr1 = arguments_.cdr as Cons;
+          const a1 = cdr1.car;
+          const cdr2 = cdr1.cdr as Cons;
+          const a2 = cdr2.car;
+          const cdr3 = cdr2.cdr as Cons;
+          const a3 = cdr3.car;
+          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+            this.ctx.rect(a0, a1, a2, a3);
+            this.ctx.save();
+            return InterpretedSymbol.of('t');
+          }
+        }
+        this.#print('Can not draw rectangle.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not draw rectangle.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  gRotate(arguments_: Cons): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (this.isOpen) {
+      try {
+        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
+          this.ctx.rotate((Math.PI / 180) * arguments_.car);
+          this.ctx.save();
+          return InterpretedSymbol.of('t');
+        }
+        this.#print('Can not rotate.');
+        return Cons.nil;
+      } catch {
+        this.#print('Can not rotate.');
+        return Cons.nil;
+      }
+    }
+    this.#print('The canvas is closed and cannot be executed.');
+    return Cons.nil;
+  }
+
+  /**
+   * Parses a color spec from the head of the argument Cons. Accepts
+   * (1 string), (3 numbers — rgb), or (4 numbers — rgba); falls back to
+   * `'black'` on anything else (legacy behavior).
+   * @param arguments_ - the argument Cons to parse
+   * @return CSS color string
+   */
+  selectColor(arguments_: Cons): string {
+    let aColor = 'black';
+    const length_ = arguments_.length();
+    const a0 = arguments_.car;
+    if (length_ === 1 && Cons.isString(a0)) {
+      aColor = a0;
+    } else if (length_ === 3) {
+      const cdr1 = arguments_.cdr as Cons;
+      const a1 = cdr1.car;
+      const cdr2 = cdr1.cdr as Cons;
+      const a2 = cdr2.car;
+      if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
+        aColor = `rgb(${a0}, ${a1}, ${a2})`;
+      } else {
+        this.#print('Can not set color. set color "black".');
+      }
+    } else if (length_ === 4) {
+      const cdr1 = arguments_.cdr as Cons;
+      const a1 = cdr1.car;
+      const cdr2 = cdr1.cdr as Cons;
+      const a2 = cdr2.car;
+      const cdr3 = cdr2.cdr as Cons;
+      const a3 = cdr3.car;
+      if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
+        aColor = `rgba(${a0}, ${a1}, ${a2}, ${a3})`;
+      } else {
+        this.#print('Can not set color. set color "black".');
+      }
+    } else {
+      this.#print('Can not set color. set color "black".');
+    }
+    return aColor;
   }
 }
