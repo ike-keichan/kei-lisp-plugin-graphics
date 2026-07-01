@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `gsave` / `grestore` — Canvas の状態スタックを明示的に操作する Lisp 関数を追加
+
+### Fixed
+
+- `gshadow-blur` が `ctx.shadowBlur` ではなく存在しない `ctx.Blur` に書き込んでおり、
+  シャドウブラーが効かなかったバグを修正（レガシー Graphist.js からの引き継ぎ）
+- `gopen` が実際のキャンバスサイズと無関係な固定文字列
+  `'canvas size, width : 600 height : 300'` を出力していたのを、
+  `canvas.width` / `canvas.height` を用いた実サイズ表示に修正
+- `gstroke-text` の失敗時メッセージが `'Can not draw fill text.'`（`gfill-text` からの
+  コピペミス）だったのを `'Can not draw stroke text.'` に修正
+
+### Changed
+
+- ほぼ全ての描画メソッドが対応する `restore()` なしに呼んでいた `ctx.save()` を削除。
+  呼び出しのたびに状態スタックが際限なく積み上がるリークを解消し、状態管理は新設の
+  `gsave` / `grestore` に一本化
+
 ## [1.0.1] - 2026-07-01
 
 ### Added
