@@ -41,6 +41,8 @@ export const typescriptConfigs = [
       // NOTE: eslint-plugin-unused-imports の no-unused-vars（_プレフィックスで抑制可能）に委譲するため無効化
       // strictTypeChecked がこのルールを有効化するため、unusedImportsConfigs の OFF 設定が上書きされないよう再度 OFF にする
       '@typescript-eslint/no-unused-vars': OFF,
+      // 型定義は interface ではなく type エイリアスを使う方針
+      '@typescript-eslint/consistent-type-definitions': [ERROR, 'type'],
     },
   },
   {
