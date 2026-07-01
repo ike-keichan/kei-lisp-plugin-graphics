@@ -86,41 +86,40 @@ Conventions:
 
 ## Branch strategy
 
-Each release gets its own **version branch** (`v1.0`, `v1.1`, ...) cut from
-`main`. Pull requests targeting the upcoming release land on that branch;
-when it is ready the version branch is merged back into `main`, which
-triggers the [Release workflow](./.github/workflows/release.yml) and
-publishes to npm.
+kei-lisp-plugin-graphics bundles several features into one minor (or major)
+release using **release-line branches** (`v1.0`, `v1.1`, ...), then merges
+them into `main` at release time. Patches go directly through `hotfix/*` PRs
+to `main`.
 
 ```
 feature/* ──┐
-fix/*     ──┤── vX.Y (version branch) ──→ main ──→ tag vX.Y.0 + npm publish
-chore/*   ──┘
-                                          hotfix/* ──→ main (urgent only)
+feature/* ──┤── vX.Y (release line) ──→ main ──→ tag vX.Y.0 ──→ npm
+feature/* ──┘                          ↑
+                                       │ (vX.Y is kept as a permanent snapshot)
+                                hotfix/* ──→ main (patches, direct)
 ```
 
-| Branch              | Purpose                                             | Lifetime                        |
-| ------------------- | --------------------------------------------------- | ------------------------------- |
-| `main`              | Latest released state. Always tag-ready             | Permanent                       |
-| `vX.Y` (version)    | Integrates the next release's PRs                   | Until release; merged & deleted |
-| `feature/*`         | A single logical change targeting the active `vX.Y` | Until merged                    |
-| `fix/*` / `chore/*` | Same flow as `feature/*`                            | Until merged                    |
-| `hotfix/*`          | Urgent fix targeting `main` directly                | Until merged                    |
+| Branch                | Purpose                                                                                                                               | Lifetime               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `main`                | Latest released state. Always tag-ready                                                                                               | Permanent              |
+| `vX.Y` (release line) | Integrates multiple features for the next minor or major release. Retained after release as a snapshot of that minor's released state | Permanent (long-lived) |
+| `feature/*`           | A single logical change targeting the active `vX.Y`                                                                                   | Until merged           |
+| `hotfix/*`            | Patch or urgent fix targeting `main` directly. Used for both routine patch releases and emergency fixes                               | Until merged           |
 
 ### Branch creation responsibilities
 
-| Branch type      | Created by          | When                                                           |
-| ---------------- | ------------------- | -------------------------------------------------------------- |
-| `vX.Y` (version) | **Maintainer only** | When planning the next release                                 |
-| `hotfix/*`       | **Maintainer only** | When a critical bug needs a patch to a released version        |
-| `feature/*` etc. | Anyone              | Anytime, branching from the **active version branch** (`vX.Y`) |
+| Branch type           | Created by          | When                                                                        |
+| --------------------- | ------------------- | --------------------------------------------------------------------------- |
+| `vX.Y` (release line) | **Maintainer only** | When planning a minor or major release that bundles 2+ features             |
+| `hotfix/*`            | **Maintainer only** | When a patch (routine or urgent) needs to be cut against a released version |
+| `feature/*`           | Anyone              | Anytime, branching from the **active release line** (`vX.Y`)                |
 
 If you are unsure which base branch to target, ask in the PR description
 or open a draft PR and the maintainer will guide you.
 
 ## Pull request guidelines
 
-1. **Branch from the active version branch** (`vX.Y`) and use a
+1. **Branch from the active release line** (`vX.Y`) and use a
    descriptive branch name (e.g. `feature/add-arc-spec`,
    `fix/stroke-color-parse`).
 2. **Keep changes focused** — one logical change per PR.
@@ -146,7 +145,7 @@ the workflow is a no-op, so it is safe to re-trigger.
 
 ### Maintainer steps
 
-1. On the version branch (`vX.Y`), update `CHANGELOG.md` — move pending
+1. On the release-line branch (`vX.Y`), update `CHANGELOG.md` — move pending
    entries under a new `## [<new-version>] - <YYYY-MM-DD>` header.
 2. Bump `version` in `package.json` to match.
 3. Open a PR from the version branch to `main`, review, and merge.
