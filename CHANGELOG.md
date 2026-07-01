@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `docs/graphics.md` の関数リファレンスの誤り・未記載項目を修正
+  - `garc` に未記載だった第 6 引数（反時計回りフラグ）を追記し、角度が度数指定である旨を明記
+  - `gimage` の 5 引数形式（描画サイズ指定 `w` × `h`）を追記
+  - `gtext-line` の説明を修正（`ctx.textBaseline` を文字列で設定する。誤って「line height / `number`」と記載していた）
+  - `gsave-jpeg` / `gsave-png` の引数仕様を修正（`path` は取らず、ブラウザ専用のダウンロード動作である旨を明記）
+  - `grotate` の角度単位を修正（実装は度数指定だが「radians」と記載していた）
+- `typedoc.json` の `intentionallyNotExported` から、このパッケージに存在しない
+  kei-lisp 内部型（`Table` / `StreamManager` / `Loop`）のコピー残りを削除
+- `.github/PULL_REQUEST_TEMPLATE.md` のベースブランチ説明を `CONTRIBUTING.md` に合わせて更新
+  （`feature/*` は `vX.Y`、`hotfix/*` は `main` を対象とする旨に修正）
+- `GraphicsPlugin` の JSDoc `@param` 名を実際の引数名に修正
+  （`args` → `arguments_`、`_ctx` → `_context`）。`pnpm doc` の警告が解消され、
+  ドキュメント生成が警告ゼロになった
+- 設定ファイルに残っていた、このパッケージに存在しない `examples/` への参照を削除
+  （`tsconfig.json` の `include`、`configs/eslint/const/index.mjs` の `FILES.SRC`）
+- どのツールも出力しない `out/` を無視する設定を、実際の生成物ディレクトリ
+  `docs/typedoc/` に修正（`eslint.config.mjs` の `ignores`、`cspell.json` の `ignorePaths`）
+
 ## [1.0.1] - 2026-07-01
 
 ### Added

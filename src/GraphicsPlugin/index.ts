@@ -124,8 +124,8 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   /**
    * Dispatches the given symbol to the matching `g…` method.
    * @param aSymbol - the call symbol
-   * @param args - the evaluated argument list
-   * @param _ctx - the interpreter context (unused by this plugin)
+   * @param arguments_ - the evaluated argument list
+   * @param _context - the interpreter context (unused by this plugin)
    * @return the method's result, or `Cons.nil` if dispatch fails
    */
   apply(aSymbol: InterpretedSymbol, arguments_: Cons, _context: PluginContext): LispValue {
@@ -135,7 +135,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   /**
    * Resolves the procedure name and invokes the matching method.
    * @param procedure - the Lisp symbol
-   * @param args - the evaluated argument list
+   * @param arguments_ - the evaluated argument list
    * @return the method's result, or `Cons.nil` if not registered
    */
   selectProcedure(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
@@ -153,7 +153,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
    * Ramda `R.invoker(1, methodName)(args, this)` call would surface the same
    * error by attempting to call `undefined`.
    * @param procedure - the Lisp symbol
-   * @param args - the evaluated argument list
+   * @param arguments_ - the evaluated argument list
    * @return the method's result
    */
   buildInFunction(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
