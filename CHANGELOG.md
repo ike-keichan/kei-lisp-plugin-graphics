@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-07-04
 
 ### Added
 
@@ -23,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   プロダクション用途は非推奨である旨の注意書きを追加
 - README / CONTRIBUTING に、個人プロジェクトのため issue での報告は歓迎するが
   外部からの pull request は原則受け付けない旨を明記
-
 - `@vitest/coverage-v8` によるテストカバレッジ計測を導入（#19）
   - `pnpm test:coverage` スクリプトと `vitest.config.js` の coverage 設定を追加
   - CI の tests ジョブをカバレッジ計測付き（`pnpm test:coverage`）に変更
@@ -43,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   引数なしは従来どおりブラウザダウンロード（`toDataURL` + `<a download>`）で、
   DOM や `toDataURL` が無い環境（Node.js / `OffscreenCanvas`）で引数なしで呼ぶと
   例外に頼らず明示的なエラーメッセージを出力するように変更（#18）
+
+### Security
+
+- 推移的依存（vitest 経由）の `vite` を 8.0.16 以上に更新し、
+  Dependabot が報告していた 2 件の脆弱性
+  （`server.fs.deny` バイパス / launch-editor 経由の NTLMv2 ハッシュ漏洩、
+  いずれも Windows のみ・開発時のみ）を解消
 
 ## [1.1.0] - 2026-07-02
 
