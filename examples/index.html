@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>kei-lisp-plugin-graphics example</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 2rem;
+      }
+      canvas {
+        border: 1px solid #ccc;
+        display: block;
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>kei-lisp-plugin-graphics — basic drawing</h1>
+    <canvas id="stage" width="640" height="360"></canvas>
+    <button id="save" type="button">Save as PNG (gsave-png)</button>
+    <script type="module" src="./basic-drawing.ts"></script>
+  </body>
+</html>
