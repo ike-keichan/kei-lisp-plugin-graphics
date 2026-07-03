@@ -115,6 +115,79 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   /**
+   * Encodes the canvas via `toDataURL` and triggers a browser download through
+   * a temporary `<a download>` element. Requires a DOM (`document`) and an
+   * `HTMLCanvasElement`; `OffscreenCanvas` has no `toDataURL`, and Node.js has
+   * no `document` — those callers must pass a file path instead.
+   * @param mimeType - the image MIME type to encode
+   * @param label - the format name used in diagnostics ("jpeg" / "png")
+   * @return `t` on success, `Cons.nil` otherwise
+   */
+  #downloadCanvas(mimeType: string, label: string): LispValue {
+    if (typeof document === 'undefined' || !('toDataURL' in this.canvas)) {
+      this.#print(
+        `Can not save ${label}. Browser download needs a DOM and an HTMLCanvasElement; pass a file path to save on Node.js.`,
+      );
+      return Cons.nil;
+    }
+    try {
+      const link = document.createElement('a');
+      link.href = this.canvas.toDataURL(mimeType);
+      link.download = 'canvas';
+      document.body.append(link);
+      link.click();
+      link.remove();
+      return InterpretedSymbol.of('t');
+    } catch {
+      this.#print(
+        `Can not save ${label}. If you are using an image in the canvas, you can't save ${label}.`,
+      );
+      return Cons.nil;
+    }
+  }
+
+  /**
+   * Writes the encoded canvas image to a file path on Node.js, using
+   * `process.getBuiltinModule('node:fs')` so browser bundles never see a
+   * `node:fs` import. `HTMLCanvasElement` (and node-canvas) encode
+   * synchronously via `toDataURL`; `OffscreenCanvas` only offers the async
+   * `convertToBlob`, so its file is written after this returns — the same
+   * fire-and-forget contract as `gImage`.
+   * @param path - the destination file path
+   * @param mimeType - the image MIME type to encode
+   * @param label - the format name used in diagnostics ("jpeg" / "png")
+   * @return `t` on success, `Cons.nil` otherwise
+   */
+  #writeCanvasToFile(path: string, mimeType: string, label: string): LispValue {
+    const fs =
+      typeof process.getBuiltinModule === 'function'
+        ? process.getBuiltinModule('node:fs')
+        : undefined;
+    if (fs === undefined) {
+      this.#print(`Can not save ${label}. Saving to a file path requires Node.js.`);
+      return Cons.nil;
+    }
+    try {
+      if ('toDataURL' in this.canvas) {
+        const dataUrl = this.canvas.toDataURL(mimeType);
+        const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+        // Uint8Array.fromBase64 is unavailable on Node 24 (the minimum supported
+        // engine), so decode with Buffer instead.
+        // eslint-disable-next-line unicorn/prefer-uint8array-base64
+        fs.writeFileSync(path, Buffer.from(base64, 'base64'));
+        return InterpretedSymbol.of('t');
+      }
+      void this.canvas.convertToBlob({ type: mimeType }).then(async (blob) => {
+        fs.writeFileSync(path, new Uint8Array(await blob.arrayBuffer()));
+      });
+      return InterpretedSymbol.of('t');
+    } catch {
+      this.#print(`Can not save ${label}.`);
+      return Cons.nil;
+    }
+  }
+
+  /**
    * Returns true if this plugin handles the given symbol.
    * @param aSymbol - the call symbol
    * @return true if `apply` should be called
@@ -603,9 +676,8 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {
       try {
-        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-          const aString = arguments_.car === 0 ? 'butt' : arguments_.car > 0 ? 'round' : 'square';
-          this.ctx.lineCap = aString;
+        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
+          this.ctx.lineCap = arguments_.car as CanvasLineCap;
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set line cap.');
@@ -623,9 +695,8 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {
       try {
-        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-          const aString = arguments_.car === 0 ? 'miter' : arguments_.car > 0 ? 'round' : 'bevel';
-          this.ctx.lineJoin = aString;
+        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
+          this.ctx.lineJoin = arguments_.car as CanvasLineJoin;
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set line join.');
@@ -760,53 +831,35 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     return Cons.nil;
   }
 
-  gSaveJpeg(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        const anImage = new Image();
-        anImage.crossOrigin = 'Anonymous';
-        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
-        anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/jpeg');
-        const link = document.createElement('a');
-        link.href = anImage.src;
-        link.download = 'canvas';
-        document.body.append(link);
-        link.click();
-        link.remove();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print(
-          "Can not save jpeg.  If you are using an image in the canvas, you can't save jpeg.",
-        );
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+  gSaveJpeg(arguments_: Cons): LispValue {
+    return this.saveCanvas(arguments_, 'image/jpeg', 'jpeg');
   }
 
-  gSavePng(): LispValue {
+  gSavePng(arguments_: Cons): LispValue {
+    return this.saveCanvas(arguments_, 'image/png', 'png');
+  }
+
+  /**
+   * Shared implementation of `gsave-jpeg` / `gsave-png`. With no argument it
+   * triggers a browser download; with a single string argument it writes the
+   * encoded image to that file path on Node.js.
+   * @param arguments_ - the evaluated argument list (empty, or one path string)
+   * @param mimeType - the image MIME type to encode
+   * @param label - the format name used in diagnostics ("jpeg" / "png")
+   * @return `t` on success, `Cons.nil` otherwise
+   */
+  saveCanvas(arguments_: Cons, mimeType: string, label: string): LispValue {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {
-      try {
-        const anImage = new Image();
-        anImage.crossOrigin = 'Anonymous';
-        // NOTE: toDataURL is not available on OffscreenCanvas; callers must use HTMLCanvasElement.
-        anImage.src = (this.canvas as HTMLCanvasElement).toDataURL('image/png');
-        const link = document.createElement('a');
-        link.href = anImage.src;
-        link.download = 'canvas';
-        document.body.append(link);
-        link.click();
-        link.remove();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print(
-          "Can not save png. If you are using an image in the canvas, you can't save png.",
-        );
-        return Cons.nil;
+      const length_ = arguments_.length();
+      if (length_ === 0) {
+        return this.#downloadCanvas(mimeType, label);
       }
+      if (length_ === 1 && Cons.isString(arguments_.car)) {
+        return this.#writeCanvasToFile(arguments_.car, mimeType, label);
+      }
+      this.#print(`Can not save ${label}.`);
+      return Cons.nil;
     }
     this.#print('The canvas is closed and cannot be executed.');
     return Cons.nil;
@@ -1109,9 +1162,8 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {
       try {
-        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-          const aString = arguments_.car === 0 ? 'inherit' : arguments_.car > 0 ? 'rtl' : 'ltr';
-          this.ctx.direction = aString;
+        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
+          this.ctx.direction = arguments_.car as CanvasDirection;
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not set text direction.');

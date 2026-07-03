@@ -3,6 +3,13 @@
 Thank you for your interest in contributing! This document explains how to set
 up the project locally and the conventions we follow.
 
+> [!NOTE]
+> kei-lisp-plugin-graphics is a personal hobby project. **Issue reports
+> (bugs, questions, ideas) are always welcome**, but external pull requests
+> are generally **not accepted** — the maintainer implements changes himself.
+> If you would like to see something changed, please open an issue and
+> discuss it first instead of writing code.
+
 ## Development environment
 
 ### Prerequisites
@@ -38,7 +45,7 @@ src/
 configs/eslint/              # Per-plugin ESLint configurations
 configs/cspell/              # cspell project dictionaries
 docs/                        # User-facing reference
-examples/                    # Runnable usage examples (tsx)
+examples/                    # Runnable usage examples (browser, via Vite)
 ```
 
 Code modules live as `<DirName>/index.ts`. PascalCase directories are

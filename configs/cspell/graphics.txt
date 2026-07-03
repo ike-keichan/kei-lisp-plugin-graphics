@@ -1,3 +1,4 @@
+Graphist
 galpha
 garc
 gbezcurve
@@ -7,7 +8,6 @@ gcolor
 gfill
 gfinish
 gimage
-Graphist
 gline
 gmove
 gopen
@@ -26,3 +26,4 @@ gtext
 gtranslate
 offsetx
 offsety
+steelblue

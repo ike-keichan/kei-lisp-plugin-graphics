@@ -1,7 +1,7 @@
 {
   "version": "0.2",
   "language": "en",
-  "words": ["keisuke", "ikeda", "kei-lisp"],
+  "words": ["keisuke", "ikeda", "keichan", "kei-lisp"],
   "dictionaries": ["lisp", "kei-lisp", "tool", "graphics"],
   "dictionaryDefinitions": [
     {

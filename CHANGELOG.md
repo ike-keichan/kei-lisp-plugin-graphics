@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-07-04
+
+### Added
+
+- DX・コミュニティ整備（#20）
+  - `SECURITY.md` — GitHub の private vulnerability reporting を窓口とする
+    脆弱性報告ポリシーを追加
+  - `CODE_OF_CONDUCT.md` — Contributor Covenant v2.1 ベースの行動規範を追加
+  - `.github/ISSUE_TEMPLATE/` — バグ報告・機能要望・質問の issue form と
+    `config.yml`（blank issue 無効化・セキュリティ報告への誘導）を追加
+  - `examples/` — ブラウザ（Vite）で動かす基本描画サンプル
+    （矩形・円・三角形・テキスト・変形・`gsave-png` ダウンロード）を追加。
+    kei-lisp と同様に `tsconfig.json` / ESLint / cspell / Prettier の
+    チェック対象に含めた
+- README に、本プロジェクトがおもちゃ（hobby）プロジェクトであり
+  プロダクション用途は非推奨である旨の注意書きを追加
+- README / CONTRIBUTING に、個人プロジェクトのため issue での報告は歓迎するが
+  外部からの pull request は原則受け付けない旨を明記
+- `@vitest/coverage-v8` によるテストカバレッジ計測を導入（#19）
+  - `pnpm test:coverage` スクリプトと `vitest.config.js` の coverage 設定を追加
+  - CI の tests ジョブをカバレッジ計測付き（`pnpm test:coverage`）に変更
+- エラーパスのテストを追加（#19）。全 `g…` 関数について、canvas がクローズ状態のとき・
+  引数の型が不一致のとき・引数の個数が不一致のときに `nil` を返すことを検証
+- CJS ビルド（`dist/index.cjs`）を `require()` で読み込めることを確認する
+  スモークテストを追加（#19）
+
+### Changed
+
+- **Breaking:** `gline-cap` / `gline-join` が数値フラグ（0 / 正 / 負）ではなく
+  Canvas API と同じ文字列（`"butt"` / `"round"` / `"square"`、
+  `"miter"` / `"round"` / `"bevel"`）を受け取るように変更（#18）
+- **Breaking:** `gtext-dire` が数値フラグではなく `ctx.direction` と同じ文字列
+  （`"ltr"` / `"rtl"` / `"inherit"`）を受け取るように変更（#18）
+- `gsave-jpeg` / `gsave-png` に Node.js 向けのオーバーロード `path: string` を追加。
+  引数なしは従来どおりブラウザダウンロード（`toDataURL` + `<a download>`）で、
+  DOM や `toDataURL` が無い環境（Node.js / `OffscreenCanvas`）で引数なしで呼ぶと
+  例外に頼らず明示的なエラーメッセージを出力するように変更（#18）
+
+### Security
+
+- 推移的依存（vitest 経由）の `vite` を 8.0.16 以上に更新し、
+  Dependabot が報告していた 2 件の脆弱性
+  （`server.fs.deny` バイパス / launch-editor 経由の NTLMv2 ハッシュ漏洩、
+  いずれも Windows のみ・開発時のみ）を解消
+
 ## [1.1.0] - 2026-07-02
 
 ### Added

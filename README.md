@@ -9,6 +9,16 @@ A Canvas2D drawing plugin for the [kei-lisp](https://github.com/ike-keichan/kei-
 interpreter. Register it on a `LispInterpreter` and call drawing primitives
 (`gopen`, `gline-to`, `gfill-rect`, ...) directly from Lisp source.
 
+> [!WARNING]
+> This is a **toy / hobby project** built for learning and experimentation.
+> **Use in production (or any other serious product) is not recommended.**
+> APIs may change without notice, and maintenance and support are provided
+> on a best-effort basis only.
+>
+> It is also a **personal project**: issue reports (bugs, questions, ideas)
+> are welcome, but external pull requests are generally **not accepted** —
+> see [CONTRIBUTING.md](./CONTRIBUTING.md).
+
 ## Features
 
 - 45 Canvas2D drawing primitives (`g…` symbols) callable directly from Lisp source
