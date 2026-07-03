@@ -88,9 +88,11 @@ mismatch, or canvas not open).
 
 ## Image / Export
 
-| Function     | Arguments                                                 | Description                                                                                                                            |
-| ------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `gimage`     | `src: string, x: number, y: number`                       | Draw an image loaded from `src` at (`x`, `y`) at its natural size                                                                      |
-| `gimage`     | `src: string, x: number, y: number, w: number, h: number` | Draw an image loaded from `src` at (`x`, `y`) scaled to `w` × `h`                                                                      |
-| `gsave-png`  | —                                                         | Trigger a browser download of the canvas as PNG (browser only; uses `toDataURL` + `<a download>`, not available on `OffscreenCanvas`)  |
-| `gsave-jpeg` | —                                                         | Trigger a browser download of the canvas as JPEG (browser only; uses `toDataURL` + `<a download>`, not available on `OffscreenCanvas`) |
+| Function     | Arguments                                                 | Description                                                                                                                  |
+| ------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `gimage`     | `src: string, x: number, y: number`                       | Draw an image loaded from `src` at (`x`, `y`) at its natural size                                                            |
+| `gimage`     | `src: string, x: number, y: number, w: number, h: number` | Draw an image loaded from `src` at (`x`, `y`) scaled to `w` × `h`                                                            |
+| `gsave-png`  | —                                                         | Trigger a browser download of the canvas as PNG (needs a DOM and an `HTMLCanvasElement`; uses `toDataURL` + `<a download>`)  |
+| `gsave-png`  | `path: string`                                            | Write the canvas as a PNG file to `path` (Node.js only)                                                                      |
+| `gsave-jpeg` | —                                                         | Trigger a browser download of the canvas as JPEG (needs a DOM and an `HTMLCanvasElement`; uses `toDataURL` + `<a download>`) |
+| `gsave-jpeg` | `path: string`                                            | Write the canvas as a JPEG file to `path` (Node.js only)                                                                     |
