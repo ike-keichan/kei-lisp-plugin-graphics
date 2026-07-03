@@ -21,7 +21,7 @@ interpreter. Register it on a `LispInterpreter` and call drawing primitives
 
 ## Features
 
-- 45 Canvas2D drawing primitives (`g…` symbols) callable directly from Lisp source
+- 75 Canvas2D drawing primitives (`g…` symbols) callable directly from Lisp source
 - Works with `HTMLCanvasElement` and `OffscreenCanvas`
 - ESM and CommonJS dual output with TypeScript types
 - Zero runtime dependencies
@@ -77,17 +77,17 @@ canvas's 2D rendering context.
 
 ## Provided Lisp functions
 
-| Category       | Symbols                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Lifecycle      | `gopen`, `gclose`, `gclear`, `gsleep`                                                                              |
-| Path           | `gstart-path`, `gfinish-path`, `gmove-to`, `gline-to`, `gquadcurve-to`, `gbezcurve-to`, `garc`, `garc-to`, `grect` |
-| Fill / stroke  | `gfill`, `gstroke`, `gfill-rect`, `gstroke-rect`, `gfill-tri`, `gstroke-tri`, `gfill-text`, `gstroke-text`         |
-| Style          | `gcolor`, `gfill-color`, `gstroke-color`, `gline-width`, `gline-cap`, `gline-join`, `galpha`, `gpattern`           |
-| Shadow         | `gshadow-color`, `gshadow-blur`, `gshadow-offsetx`, `gshadow-offsety`                                              |
-| Text           | `gtext-font`, `gtext-align`, `gtext-line`, `gtext-dire`                                                            |
-| Transform      | `gtranslate`, `gscale`, `grotate`                                                                                  |
-| State          | `gsave`, `grestore`                                                                                                |
-| Image / export | `gimage`, `gsave-png`, `gsave-jpeg`                                                                                |
+| Category       | Symbols                                                                                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lifecycle      | `gopen`, `gclose`, `gclear`, `greset`, `gwidth`, `gheight`, `gsleep`                                                                                                                                                                                                |
+| Path           | `gstart-path`, `gfinish-path`, `gmove-to`, `gline-to`, `gquadcurve-to`, `gbezcurve-to`, `garc`, `garc-to`, `grect`, `ground-rect`, `gellipse`, `gclip`, `gis-point-in-path`, `gis-point-in-stroke`                                                                  |
+| Fill / stroke  | `gfill`, `gstroke`, `gfill-rect`, `gstroke-rect`, `gfill-tri`, `gstroke-tri`, `gfill-text`, `gstroke-text`                                                                                                                                                          |
+| Style          | `gcolor`, `gfill-color`, `gstroke-color`, `gline-width`, `gline-cap`, `gline-join`, `gline-dash`, `gline-dash-offset`, `gmiter-limit`, `galpha`, `gpattern`, `gcomposite`, `gfilter`, `gimage-smoothing`, `glinear-gradient`, `gradial-gradient`, `gconic-gradient` |
+| Shadow         | `gshadow-color`, `gshadow-blur`, `gshadow-offsetx`, `gshadow-offsety`                                                                                                                                                                                               |
+| Text           | `gtext-font`, `gtext-align`, `gtext-line`, `gtext-dire`, `gmeasure-text`, `gletter-spacing`, `gword-spacing`, `gfont-kerning`, `gfont-stretch`, `gfont-variant`, `gtext-rendering`                                                                                  |
+| Transform      | `gtranslate`, `gscale`, `grotate`, `gtransform`, `gset-transform`, `greset-transform`                                                                                                                                                                               |
+| State          | `gsave`, `grestore`                                                                                                                                                                                                                                                 |
+| Image / export | `gimage`, `gsave-png`, `gsave-jpeg`, `gclear-rect`, `gpixel`, `gset-pixel`                                                                                                                                                                                          |
 
 Each function returns `t` on success. See [`docs/graphics.md`](./docs/graphics.md)
 for argument signatures and side effects.

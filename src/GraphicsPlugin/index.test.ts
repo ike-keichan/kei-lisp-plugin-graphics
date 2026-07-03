@@ -48,6 +48,35 @@ type FakeContext = {
   rotate: ReturnType<typeof vi.fn>;
   createPattern: ReturnType<typeof vi.fn>;
   drawImage: ReturnType<typeof vi.fn>;
+  lineDashOffset: number;
+  miterLimit: number;
+  globalCompositeOperation: string;
+  filter: string;
+  imageSmoothingEnabled: boolean;
+  imageSmoothingQuality: string;
+  letterSpacing: string;
+  wordSpacing: string;
+  fontKerning: string;
+  fontStretch: string;
+  fontVariantCaps: string;
+  textRendering: string;
+  ellipse: ReturnType<typeof vi.fn>;
+  roundRect: ReturnType<typeof vi.fn>;
+  setLineDash: ReturnType<typeof vi.fn>;
+  clip: ReturnType<typeof vi.fn>;
+  isPointInPath: ReturnType<typeof vi.fn>;
+  isPointInStroke: ReturnType<typeof vi.fn>;
+  transform: ReturnType<typeof vi.fn>;
+  setTransform: ReturnType<typeof vi.fn>;
+  resetTransform: ReturnType<typeof vi.fn>;
+  measureText: ReturnType<typeof vi.fn>;
+  reset: ReturnType<typeof vi.fn>;
+  getImageData: ReturnType<typeof vi.fn>;
+  putImageData: ReturnType<typeof vi.fn>;
+  createImageData: ReturnType<typeof vi.fn>;
+  createLinearGradient: ReturnType<typeof vi.fn>;
+  createRadialGradient: ReturnType<typeof vi.fn>;
+  createConicGradient: ReturnType<typeof vi.fn>;
 };
 
 /**
@@ -94,6 +123,35 @@ function makeFakeContext(): FakeContext {
     rotate: vi.fn(),
     createPattern: vi.fn().mockReturnValue(null),
     drawImage: vi.fn(),
+    lineDashOffset: 0,
+    miterLimit: 10,
+    globalCompositeOperation: 'source-over',
+    filter: 'none',
+    imageSmoothingEnabled: true,
+    imageSmoothingQuality: 'low',
+    letterSpacing: '0px',
+    wordSpacing: '0px',
+    fontKerning: 'auto',
+    fontStretch: 'normal',
+    fontVariantCaps: 'normal',
+    textRendering: 'auto',
+    ellipse: vi.fn(),
+    roundRect: vi.fn(),
+    setLineDash: vi.fn(),
+    clip: vi.fn(),
+    isPointInPath: vi.fn().mockReturnValue(true),
+    isPointInStroke: vi.fn().mockReturnValue(false),
+    transform: vi.fn(),
+    setTransform: vi.fn(),
+    resetTransform: vi.fn(),
+    measureText: vi.fn().mockReturnValue({ width: 42 }),
+    reset: vi.fn(),
+    getImageData: vi.fn().mockReturnValue({ data: [10, 20, 30, 255] }),
+    putImageData: vi.fn(),
+    createImageData: vi.fn().mockReturnValue({ data: new Uint8ClampedArray(4) }),
+    createLinearGradient: vi.fn().mockReturnValue({ addColorStop: vi.fn() }),
+    createRadialGradient: vi.fn().mockReturnValue({ addColorStop: vi.fn() }),
+    createConicGradient: vi.fn().mockReturnValue({ addColorStop: vi.fn() }),
   };
 }
 
@@ -142,6 +200,22 @@ function makeContext(): PluginContext {
     depth: 1,
     eval: (form) => interpreter.eval(form),
   };
+}
+
+/**
+ * Creates an already-opened plugin and exposes the fake context for asserts.
+ */
+function openPlugin(): { plugin: GraphicsPlugin; ctx: FakeContext } {
+  const { plugin } = makePlugin();
+  plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+  return { plugin, ctx: plugin.ctx as unknown as FakeContext };
+}
+
+/**
+ * Applies the named Lisp function with the given arguments.
+ */
+function call(plugin: GraphicsPlugin, name: string, ...values: LispValue[]): LispValue {
+  return plugin.apply(InterpretedSymbol.of(name), arguments_(...values), makeContext());
 }
 
 describe('GraphicsPlugin', () => {
@@ -736,6 +810,197 @@ describe('GraphicsPlugin', () => {
     });
   });
 
+  describe('Canvas API coverage additions (#31)', () => {
+    it('gellipse converts angles from degrees and maps the ccw flag', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gellipse', 50, 60, 40, 20, 90, 0, 180, 1)).toBe(
+        InterpretedSymbol.of('t'),
+      );
+      expect(ctx.ellipse).toHaveBeenCalledWith(50, 60, 40, 20, Math.PI / 2, 0, Math.PI, true);
+    });
+
+    it('ground-rect forwards x, y, w, h, r to ctx.roundRect', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'ground-rect', 10, 20, 100, 50, 8);
+      expect(ctx.roundRect).toHaveBeenCalledWith(10, 20, 100, 50, 8);
+    });
+
+    it('gline-dash forwards segments to ctx.setLineDash', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gline-dash', 5, 3);
+      expect(ctx.setLineDash).toHaveBeenCalledWith([5, 3]);
+    });
+
+    it('gline-dash with no arguments clears the dash pattern', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gline-dash');
+      expect(ctx.setLineDash).toHaveBeenCalledWith([]);
+    });
+
+    it('gline-dash-offset and gmiter-limit write their properties', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gline-dash-offset', 4);
+      call(plugin, 'gmiter-limit', 3);
+      expect(ctx.lineDashOffset).toBe(4);
+      expect(ctx.miterLimit).toBe(3);
+    });
+
+    it('gclip forwards to ctx.clip', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gclip')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.clip).toHaveBeenCalledTimes(1);
+    });
+
+    it('gis-point-in-path returns t when the context reports a hit', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gis-point-in-path', 5, 5)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.isPointInPath).toHaveBeenCalledWith(5, 5);
+    });
+
+    it('gis-point-in-stroke returns nil when the context reports a miss', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gis-point-in-stroke', 5, 5)).toBe(Cons.nil);
+    });
+
+    it('gtransform / gset-transform / greset-transform forward matrices', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gtransform', 1, 0, 0, 1, 10, 20);
+      call(plugin, 'gset-transform', 2, 0, 0, 2, 0, 0);
+      call(plugin, 'greset-transform');
+      expect(ctx.transform).toHaveBeenCalledWith(1, 0, 0, 1, 10, 20);
+      expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
+      expect(ctx.resetTransform).toHaveBeenCalledTimes(1);
+    });
+
+    it('gcomposite and gfilter write their properties', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gcomposite', 'multiply');
+      call(plugin, 'gfilter', 'blur(2px)');
+      expect(ctx.globalCompositeOperation).toBe('multiply');
+      expect(ctx.filter).toBe('blur(2px)');
+    });
+
+    it('gimage-smoothing "off" disables smoothing', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gimage-smoothing', 'off');
+      expect(ctx.imageSmoothingEnabled).toBe(false);
+    });
+
+    it('gimage-smoothing "high" enables smoothing and sets quality', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gimage-smoothing', 'high');
+      expect(ctx.imageSmoothingEnabled).toBe(true);
+      expect(ctx.imageSmoothingQuality).toBe('high');
+    });
+
+    it('gimage-smoothing rejects an unknown keyword', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gimage-smoothing', 'bogus')).toBe(Cons.nil);
+    });
+
+    it('gmeasure-text returns the measured width as a number', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gmeasure-text', 'hello')).toBe(42);
+      expect(ctx.measureText).toHaveBeenCalledWith('hello');
+    });
+
+    it('text style setters write their properties', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gletter-spacing', '2px');
+      call(plugin, 'gword-spacing', '4px');
+      call(plugin, 'gfont-kerning', 'none');
+      call(plugin, 'gfont-stretch', 'condensed');
+      call(plugin, 'gfont-variant', 'small-caps');
+      call(plugin, 'gtext-rendering', 'geometricPrecision');
+      expect(ctx.letterSpacing).toBe('2px');
+      expect(ctx.wordSpacing).toBe('4px');
+      expect(ctx.fontKerning).toBe('none');
+      expect(ctx.fontStretch).toBe('condensed');
+      expect(ctx.fontVariantCaps).toBe('small-caps');
+      expect(ctx.textRendering).toBe('geometricPrecision');
+    });
+
+    it('gclear-rect forwards to ctx.clearRect', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gclear-rect', 1, 2, 3, 4);
+      expect(ctx.clearRect).toHaveBeenCalledWith(1, 2, 3, 4);
+    });
+
+    it('greset forwards to ctx.reset', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'greset');
+      expect(ctx.reset).toHaveBeenCalledTimes(1);
+    });
+
+    it('gwidth and gheight return the canvas dimensions', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gwidth')).toBe(800);
+      expect(call(plugin, 'gheight')).toBe(600);
+    });
+
+    it('gpixel returns an (r g b a) list', () => {
+      const { plugin, ctx } = openPlugin();
+      const result = call(plugin, 'gpixel', 3, 4);
+      expect(ctx.getImageData).toHaveBeenCalledWith(3, 4, 1, 1);
+      expect(Cons.toString(result as Cons)).toBe('(10 20 30 255)');
+    });
+
+    it('gset-pixel writes a 1x1 ImageData at the given position', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gset-pixel', 3, 4, 255, 0, 0, 255)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.putImageData).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.any(Uint8ClampedArray) as Uint8ClampedArray }),
+        3,
+        4,
+      );
+    });
+
+    it('glinear-gradient adds all stops and sets both styles', () => {
+      const { plugin, ctx } = openPlugin();
+      const gradient = { addColorStop: vi.fn() };
+      ctx.createLinearGradient.mockReturnValue(gradient);
+      expect(call(plugin, 'glinear-gradient', 0, 0, 100, 0, 0, 'red', 1, 'blue')).toBe(
+        InterpretedSymbol.of('t'),
+      );
+      expect(ctx.createLinearGradient).toHaveBeenCalledWith(0, 0, 100, 0);
+      expect(gradient.addColorStop.mock.calls).toEqual([
+        [0, 'red'],
+        [1, 'blue'],
+      ]);
+      expect(ctx.fillStyle).toBe(gradient);
+      expect(ctx.strokeStyle).toBe(gradient);
+    });
+
+    it('glinear-gradient rejects an odd number of stop values', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'glinear-gradient', 0, 0, 100, 0, 0, 'red', 1)).toBe(Cons.nil);
+    });
+
+    it('gradial-gradient forwards both circles', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gradial-gradient', 50, 50, 0, 50, 50, 40, 0, 'red', 1, 'blue');
+      expect(ctx.createRadialGradient).toHaveBeenCalledWith(50, 50, 0, 50, 50, 40);
+    });
+
+    it('gconic-gradient converts the start angle from degrees', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gconic-gradient', 90, 50, 50, 0, 'red', 1, 'blue');
+      expect(ctx.createConicGradient).toHaveBeenCalledWith(Math.PI / 2, 50, 50);
+    });
+
+    it('gfill-text accepts an optional maxWidth fourth argument', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gfill-text', 'hi', 5, 15, 100);
+      expect(ctx.fillText).toHaveBeenCalledWith('hi', 5, 15, 100);
+    });
+
+    it('gstroke-text accepts an optional maxWidth fourth argument', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gstroke-text', 'hi', 5, 15, 100);
+      expect(ctx.strokeText).toHaveBeenCalledWith('hi', 5, 15, 100);
+    });
+  });
+
   describe('error paths', () => {
     describe('closed canvas', () => {
       // Iterator helpers (`keys().map().toArray()`) are not typed under the
@@ -786,6 +1051,33 @@ describe('GraphicsPlugin', () => {
         { name: 'gtranslate', args: [1, 'x'] },
         { name: 'grect', args: [1, 2, 3, 'x'] },
         { name: 'grotate', args: ['x'] },
+        { name: 'gellipse', args: [1, 2, 3, 4, 5, 6, 7, 'x'] },
+        { name: 'ground-rect', args: [1, 2, 3, 4, 'x'] },
+        { name: 'gline-dash', args: ['x'] },
+        { name: 'gline-dash-offset', args: ['x'] },
+        { name: 'gmiter-limit', args: ['x'] },
+        { name: 'gis-point-in-path', args: [1, 'x'] },
+        { name: 'gis-point-in-stroke', args: [1, 'x'] },
+        { name: 'gtransform', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'gset-transform', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'gcomposite', args: [1] },
+        { name: 'gfilter', args: [1] },
+        { name: 'gimage-smoothing', args: [1] },
+        { name: 'gmeasure-text', args: [1] },
+        { name: 'gletter-spacing', args: [1] },
+        { name: 'gword-spacing', args: [1] },
+        { name: 'gfont-kerning', args: [1] },
+        { name: 'gfont-stretch', args: [1] },
+        { name: 'gfont-variant', args: [1] },
+        { name: 'gtext-rendering', args: [1] },
+        { name: 'gclear-rect', args: [1, 2, 3, 'x'] },
+        { name: 'gpixel', args: [1, 'x'] },
+        { name: 'gset-pixel', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'glinear-gradient', args: ['x', 0, 100, 0, 0, 'red', 1, 'blue'] },
+        { name: 'gradial-gradient', args: ['x', 0, 0, 0, 0, 40, 0, 'red', 1, 'blue'] },
+        { name: 'gconic-gradient', args: ['x', 0, 0, 0, 'red', 1, 'blue'] },
+        { name: 'gfill-text', args: ['a', 1, 2, 'x'] },
+        { name: 'gstroke-text', args: ['a', 1, 2, 'x'] },
       ];
 
       it.each(typeMismatchCases)(
@@ -841,6 +1133,25 @@ describe('GraphicsPlugin', () => {
         { name: 'gtranslate', args: [1] },
         { name: 'grect', args: [1, 2, 3] },
         { name: 'grotate', args: [1, 2] },
+        { name: 'gellipse', args: [1, 2, 3, 4, 5, 6, 7] },
+        { name: 'ground-rect', args: [1, 2, 3, 4] },
+        { name: 'gline-dash-offset', args: [1, 2] },
+        { name: 'gmiter-limit', args: [1, 2] },
+        { name: 'gis-point-in-path', args: [1] },
+        { name: 'gis-point-in-stroke', args: [1] },
+        { name: 'gtransform', args: [1, 2, 3, 4, 5] },
+        { name: 'gset-transform', args: [1, 2, 3, 4, 5] },
+        { name: 'gcomposite', args: ['multiply', 'screen'] },
+        { name: 'gfilter', args: [] },
+        { name: 'gimage-smoothing', args: [] },
+        { name: 'gmeasure-text', args: [] },
+        { name: 'gletter-spacing', args: ['1px', '2px'] },
+        { name: 'gclear-rect', args: [1, 2, 3] },
+        { name: 'gpixel', args: [1] },
+        { name: 'gset-pixel', args: [1, 2, 3, 4, 5] },
+        { name: 'glinear-gradient', args: [0, 0, 100, 0] },
+        { name: 'gradial-gradient', args: [0, 0, 0, 0, 0, 40] },
+        { name: 'gconic-gradient', args: [0, 0, 0] },
       ];
 
       it.each(arityCases)('$name returns nil for a wrong argument count', ({ name, args }) => {
