@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Canvas 2D API のカバレッジを拡大し、30 個の `g…` 関数を追加（45 → 75 関数、#31）
+  - グラデーション: `glinear-gradient` / `gradial-gradient` / `gconic-gradient`
+  - 図形・パス: `gellipse` / `ground-rect` / `gclip` / `gis-point-in-path` / `gis-point-in-stroke`
+  - 線: `gline-dash` / `gline-dash-offset` / `gmiter-limit`
+  - 変形: `gtransform` / `gset-transform` / `greset-transform`
+  - 合成・画質: `gcomposite` / `gfilter` / `gimage-smoothing`
+  - テキスト: `gmeasure-text` / `gletter-spacing` / `gword-spacing` / `gfont-kerning` /
+    `gfont-stretch` / `gfont-variant` / `gtext-rendering`
+  - ピクセル・その他: `gpixel` / `gset-pixel` / `gclear-rect` / `greset` / `gwidth` / `gheight`
+- `gfill-text` / `gstroke-text` に第4引数 `maxWidth` を追加（#31）
+- 値を返す関数（`gwidth` / `gheight` / `gmeasure-text` / `gpixel` /
+  `gis-point-in-path` / `gis-point-in-stroke`）の戻り値規約を docs に明文化（#31）
+
 ## [2.0.0] - 2026-07-04
 
 ### Added
