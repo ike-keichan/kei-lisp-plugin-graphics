@@ -10,6 +10,78 @@
 import type { KeiLispPlugin, LispValue, PluginContext } from 'kei-lisp';
 import { Cons, InterpretedSymbol } from 'kei-lisp';
 
+// Allowed values for the enum-string setters, mirroring the Canvas 2D API
+// types. Invalid values are rejected with a diagnostic instead of being
+// silently ignored by the canvas.
+const LINE_CAPS = new Set<string>(['butt', 'round', 'square']);
+const LINE_JOINS = new Set<string>(['miter', 'round', 'bevel']);
+const TEXT_ALIGNS = new Set<string>(['left', 'right', 'center', 'start', 'end']);
+const TEXT_BASELINES = new Set<string>([
+  'top',
+  'hanging',
+  'middle',
+  'alphabetic',
+  'ideographic',
+  'bottom',
+]);
+const TEXT_DIRECTIONS = new Set<string>(['ltr', 'rtl', 'inherit']);
+const FONT_KERNINGS = new Set<string>(['auto', 'normal', 'none']);
+const FONT_STRETCHES = new Set<string>([
+  'ultra-condensed',
+  'extra-condensed',
+  'condensed',
+  'semi-condensed',
+  'normal',
+  'semi-expanded',
+  'expanded',
+  'extra-expanded',
+  'ultra-expanded',
+]);
+const FONT_VARIANTS = new Set<string>([
+  'normal',
+  'small-caps',
+  'all-small-caps',
+  'petite-caps',
+  'all-petite-caps',
+  'unicase',
+  'titling-caps',
+]);
+const TEXT_RENDERINGS = new Set<string>([
+  'auto',
+  'optimizeSpeed',
+  'optimizeLegibility',
+  'geometricPrecision',
+]);
+const PATTERN_REPETITIONS = new Set<string>(['repeat', 'repeat-x', 'repeat-y', 'no-repeat']);
+const COMPOSITE_OPERATIONS = new Set<string>([
+  'source-over',
+  'source-in',
+  'source-out',
+  'source-atop',
+  'destination-over',
+  'destination-in',
+  'destination-out',
+  'destination-atop',
+  'lighter',
+  'copy',
+  'xor',
+  'multiply',
+  'screen',
+  'overlay',
+  'darken',
+  'lighten',
+  'color-dodge',
+  'color-burn',
+  'hard-light',
+  'soft-light',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+]);
+
 /**
  * @class
  * @classdesc Canvas2D drawing plugin for the kei-lisp interpreter. Implements
@@ -17,20 +89,38 @@ import { Cons, InterpretedSymbol } from 'kei-lisp';
  *            exposes 75 `g…` Lisp functions that proxy to a 2D rendering
  *            context.
  * @author Keisuke Ikeda
- * @this {GraphicsPlugin}
  */
-export class GraphicsPlugin extends Object implements KeiLispPlugin {
+export class GraphicsPlugin implements KeiLispPlugin {
   /**
    * Dispatch map from a Lisp function name (InterpretedSymbol) to the name of
-   * the GraphicsPlugin method that implements it.
+   * the GraphicsPlugin method that implements it. Private so hosts cannot
+   * mutate the registered function set.
    */
-  static readonly buildInFunctions: Map<InterpretedSymbol, string> = GraphicsPlugin.setup();
+  static readonly #builtInFunctions: Map<InterpretedSymbol, string> = GraphicsPlugin.#setup();
+
+  /**
+   * Lists every Lisp function name this plugin registers.
+   * @return the sorted `g…` function names
+   */
+  static functionNames(): string[] {
+    // Iterator helpers and Array#toSorted are not typed under the ES2022 lib
+    // this project compiles against, so spread the iterator and sort a copy.
+    return (
+      // eslint-disable-next-line unicorn/prefer-iterator-to-array
+      [...GraphicsPlugin.#builtInFunctions.keys()]
+        .map(String)
+        // Array#toSorted is not typed under the ES2022 lib this project
+        // compiles against, so sort a fresh copy in place.
+        // eslint-disable-next-line unicorn/no-array-sort
+        .sort((a, b) => a.localeCompare(b))
+    );
+  }
 
   /**
    * Builds the dispatch table.
    * @return the dispatch table
    */
-  static setup(): Map<InterpretedSymbol, string> {
+  static #setup(): Map<InterpretedSymbol, string> {
     const aTable = new Map<InterpretedSymbol, string>();
     aTable.set(InterpretedSymbol.of('galpha'), 'gAlpha');
     aTable.set(InterpretedSymbol.of('garc'), 'gArc');
@@ -69,8 +159,12 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     aTable.set(InterpretedSymbol.of('gstroke-text'), 'gStrokeText');
     aTable.set(InterpretedSymbol.of('gstroke-tri'), 'gStrokeTri');
     aTable.set(InterpretedSymbol.of('gtext-align'), 'gTextAlign');
-    aTable.set(InterpretedSymbol.of('gtext-dire'), 'gTextDirection');
+    aTable.set(InterpretedSymbol.of('gtext-direction'), 'gTextDirection');
     aTable.set(InterpretedSymbol.of('gtext-font'), 'gTextFont');
+    aTable.set(InterpretedSymbol.of('gtext-baseline'), 'gTextBaseline');
+    // Deprecated aliases kept for backward compatibility with the legacy
+    // Graphist names; prefer gtext-direction / gtext-baseline.
+    aTable.set(InterpretedSymbol.of('gtext-dire'), 'gTextDirection');
     aTable.set(InterpretedSymbol.of('gtext-line'), 'gTextBaseline');
     aTable.set(InterpretedSymbol.of('gtranslate'), 'gTranslate');
     aTable.set(InterpretedSymbol.of('grect'), 'gRect');
@@ -125,7 +219,6 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
    * @param canvas - the canvas to draw to
    */
   constructor(canvas: HTMLCanvasElement | OffscreenCanvas) {
-    super();
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.isOpen = false;
@@ -172,6 +265,18 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     }
     this.#print(failureMessage);
     return Cons.nil;
+  }
+
+  /**
+   * Reads a single string argument and validates it against an allowlist.
+   * @param arguments_ - the evaluated argument list
+   * @param allowed - the accepted values
+   * @return the validated string, or `null` on wrong arity, a non-string
+   *         argument, or a value outside the allowlist
+   */
+  #enumString(arguments_: Cons, allowed: ReadonlySet<string>): string | null {
+    if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
+    return allowed.has(arguments_.car) ? arguments_.car : null;
   }
 
   /**
@@ -337,7 +442,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
    * @return true if `apply` should be called
    */
   has(aSymbol: InterpretedSymbol): boolean {
-    return GraphicsPlugin.buildInFunctions.has(aSymbol);
+    return GraphicsPlugin.#builtInFunctions.has(aSymbol);
   }
 
   /**
@@ -348,41 +453,13 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
    * @return the method's result, or `Cons.nil` if dispatch fails
    */
   apply(aSymbol: InterpretedSymbol, arguments_: Cons, _context: PluginContext): LispValue {
-    return this.selectProcedure(aSymbol, arguments_);
-  }
-
-  /**
-   * Resolves the procedure name and invokes the matching method.
-   * @param procedure - the Lisp symbol
-   * @param arguments_ - the evaluated argument list
-   * @return the method's result, or `Cons.nil` if not registered
-   */
-  selectProcedure(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
-    if (GraphicsPlugin.buildInFunctions.has(procedure)) {
-      return this.buildInFunction(procedure, arguments_);
+    const methodName = GraphicsPlugin.#builtInFunctions.get(aSymbol);
+    if (methodName === undefined) {
+      this.#print(`I could find no procedure description for ${String(aSymbol)}`);
+      return Cons.nil;
     }
-    this.#print(`I could find no procedure description for ${String(procedure)}`);
-    return Cons.nil;
-  }
-
-  /**
-   * Looks up and invokes the JS method that implements the given Lisp symbol.
-   * Throws `TypeError` when the dispatch table points to a method that does
-   * not exist on the instance — this matches the legacy behavior, where the
-   * Ramda `R.invoker(1, methodName)(args, this)` call would surface the same
-   * error by attempting to call `undefined`.
-   * @param procedure - the Lisp symbol
-   * @param arguments_ - the evaluated argument list
-   * @return the method's result
-   */
-  buildInFunction(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
-    const methodName = GraphicsPlugin.buildInFunctions.get(procedure) as string;
-    const target = this as unknown as Record<string, unknown>;
-    const method = target[methodName];
-    if (typeof method !== 'function') {
-      throw new TypeError(`${this.constructor.name} does not have a method named "${methodName}"`);
-    }
-    return (method as (arguments__: Cons) => LispValue).call(this, arguments_);
+    const target = this as unknown as Record<string, (arguments__: Cons) => LispValue>;
+    return target[methodName].call(this, arguments_);
   }
 
   /**
@@ -807,41 +884,27 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gLineCap(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.lineCap = arguments_.car as CanvasLineCap;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set line cap.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set line cap.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set line cap. Expected "butt" / "round" / "square".',
+      (context) => {
+        const value = this.#enumString(arguments_, LINE_CAPS);
+        if (value === null) return null;
+        context.lineCap = value as CanvasLineCap;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gLineJoin(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.lineJoin = arguments_.car as CanvasLineJoin;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set line join.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set line join.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set line join. Expected "miter" / "round" / "bevel".',
+      (context) => {
+        const value = this.#enumString(arguments_, LINE_JOINS);
+        if (value === null) return null;
+        context.lineJoin = value as CanvasLineJoin;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gLineWidth(arguments_: Cons): LispValue {
@@ -907,34 +970,22 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gPattern(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 2) {
-          const a0 = arguments_.car;
-          const a1 = (arguments_.cdr as Cons).car;
-          if (Cons.isString(a0) && Cons.isNumber(a1)) {
-            const aString = a1 === 0 ? 'repeat' : a1 > 0 ? 'repeat-x' : 'repeat-y';
-            const context = this.ctx;
-            const anImage = new Image();
-            anImage.src = a0;
-            anImage.onload = () => {
-              // Legacy bug: createPattern() may return null; assigning null to fillStyle
-              // is a no-op in practice (browsers ignore or coerce it).
-              context.fillStyle = context.createPattern(anImage, aString) as CanvasPattern;
-            };
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not set pattern.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set pattern.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set pattern. Expected an image source and a repetition ("repeat" / "repeat-x" / "repeat-y" / "no-repeat").',
+      (context) => {
+        if (arguments_.length() !== 2) return null;
+        const [a0, a1] = this.#listValues(arguments_);
+        if (!Cons.isString(a0) || !Cons.isString(a1) || !PATTERN_REPETITIONS.has(a1)) return null;
+        const anImage = new Image();
+        anImage.src = a0;
+        anImage.onload = () => {
+          // Legacy bug: createPattern() may return null; assigning null to fillStyle
+          // is a no-op in practice (browsers ignore or coerce it).
+          context.fillStyle = context.createPattern(anImage, a1) as CanvasPattern;
+        };
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gQuadCurveTo(arguments_: Cons): LispValue {
@@ -1245,60 +1296,39 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gTextAlign(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.textAlign = arguments_.car as CanvasTextAlign;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set text align.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set text align.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set text align. Expected "left" / "right" / "center" / "start" / "end".',
+      (context) => {
+        const value = this.#enumString(arguments_, TEXT_ALIGNS);
+        if (value === null) return null;
+        context.textAlign = value as CanvasTextAlign;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gTextBaseline(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.textBaseline = arguments_.car as CanvasTextBaseline;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set text baseline.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set text baseline.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set text baseline. Expected "top" / "hanging" / "middle" / "alphabetic" / "ideographic" / "bottom".',
+      (context) => {
+        const value = this.#enumString(arguments_, TEXT_BASELINES);
+        if (value === null) return null;
+        context.textBaseline = value as CanvasTextBaseline;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gTextDirection(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.direction = arguments_.car as CanvasDirection;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set text direction.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set text direction.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set text direction. Expected "ltr" / "rtl" / "inherit".',
+      (context) => {
+        const value = this.#enumString(arguments_, TEXT_DIRECTIONS);
+        if (value === null) return null;
+        context.direction = value as CanvasDirection;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gTextFont(arguments_: Cons): LispValue {
@@ -1536,11 +1566,15 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gComposite(arguments_: Cons): LispValue {
-    return this.#execute('Can not set composite operation.', (context) => {
-      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
-      context.globalCompositeOperation = arguments_.car as GlobalCompositeOperation;
-      return InterpretedSymbol.of('t');
-    });
+    return this.#execute(
+      'Can not set composite operation. Expected a globalCompositeOperation keyword such as "source-over" / "multiply" / "screen".',
+      (context) => {
+        const value = this.#enumString(arguments_, COMPOSITE_OPERATIONS);
+        if (value === null) return null;
+        context.globalCompositeOperation = value as GlobalCompositeOperation;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gFilter(arguments_: Cons): LispValue {
@@ -1591,35 +1625,51 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gFontKerning(arguments_: Cons): LispValue {
-    return this.#execute('Can not set font kerning.', (context) => {
-      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
-      context.fontKerning = arguments_.car as CanvasFontKerning;
-      return InterpretedSymbol.of('t');
-    });
+    return this.#execute(
+      'Can not set font kerning. Expected "auto" / "normal" / "none".',
+      (context) => {
+        const value = this.#enumString(arguments_, FONT_KERNINGS);
+        if (value === null) return null;
+        context.fontKerning = value as CanvasFontKerning;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gFontStretch(arguments_: Cons): LispValue {
-    return this.#execute('Can not set font stretch.', (context) => {
-      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
-      context.fontStretch = arguments_.car as CanvasFontStretch;
-      return InterpretedSymbol.of('t');
-    });
+    return this.#execute(
+      'Can not set font stretch. Expected a font-stretch keyword such as "condensed" / "normal" / "expanded".',
+      (context) => {
+        const value = this.#enumString(arguments_, FONT_STRETCHES);
+        if (value === null) return null;
+        context.fontStretch = value as CanvasFontStretch;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gFontVariant(arguments_: Cons): LispValue {
-    return this.#execute('Can not set font variant.', (context) => {
-      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
-      context.fontVariantCaps = arguments_.car as CanvasFontVariantCaps;
-      return InterpretedSymbol.of('t');
-    });
+    return this.#execute(
+      'Can not set font variant. Expected a font-variant-caps keyword such as "normal" / "small-caps".',
+      (context) => {
+        const value = this.#enumString(arguments_, FONT_VARIANTS);
+        if (value === null) return null;
+        context.fontVariantCaps = value as CanvasFontVariantCaps;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gTextRendering(arguments_: Cons): LispValue {
-    return this.#execute('Can not set text rendering.', (context) => {
-      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
-      context.textRendering = arguments_.car as CanvasTextRendering;
-      return InterpretedSymbol.of('t');
-    });
+    return this.#execute(
+      'Can not set text rendering. Expected "auto" / "optimizeSpeed" / "optimizeLegibility" / "geometricPrecision".',
+      (context) => {
+        const value = this.#enumString(arguments_, TEXT_RENDERINGS);
+        if (value === null) return null;
+        context.textRendering = value as CanvasTextRendering;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gClearRect(arguments_: Cons): LispValue {

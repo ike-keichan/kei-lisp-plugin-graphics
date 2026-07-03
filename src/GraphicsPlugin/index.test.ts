@@ -262,17 +262,20 @@ describe('GraphicsPlugin', () => {
     });
   });
 
-  describe('buildInFunction', () => {
-    it('throws TypeError when the dispatch table points to a missing method', () => {
-      const { plugin } = makePlugin();
-      // Temporarily inject a symbol that maps to a non-existent method name.
-      const orphan = InterpretedSymbol.of('test-orphan');
-      GraphicsPlugin.buildInFunctions.set(orphan, 'methodDoesNotExist');
-      try {
-        expect(() => plugin.buildInFunction(orphan, Cons.nil)).toThrow(TypeError);
-      } finally {
-        GraphicsPlugin.buildInFunctions.delete(orphan);
-      }
+  describe('functionNames', () => {
+    it('lists every registered Lisp function, sorted', () => {
+      const names = GraphicsPlugin.functionNames();
+      expect(names).toContain('gopen');
+      expect(names).toContain('glinear-gradient');
+      // eslint-disable-next-line unicorn/no-array-sort -- toSorted is untyped under lib ES2022
+      expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    });
+
+    it('includes the deprecated aliases alongside the new names', () => {
+      const names = GraphicsPlugin.functionNames();
+      expect(names).toEqual(
+        expect.arrayContaining(['gtext-dire', 'gtext-direction', 'gtext-line', 'gtext-baseline']),
+      );
     });
   });
 
@@ -1001,14 +1004,58 @@ describe('GraphicsPlugin', () => {
     });
   });
 
+  describe('API design cleanups (#32)', () => {
+    it('gtext-direction is the primary name and gtext-dire still works as an alias', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gtext-direction', 'rtl')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.direction).toBe('rtl');
+      expect(call(plugin, 'gtext-dire', 'ltr')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.direction).toBe('ltr');
+    });
+
+    it('gtext-baseline is the primary name and gtext-line still works as an alias', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gtext-baseline', 'middle')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.textBaseline).toBe('middle');
+      expect(call(plugin, 'gtext-line', 'top')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.textBaseline).toBe('top');
+    });
+
+    it('gpattern accepts a string repetition keyword', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gpattern', 'https://example.test/p.png', 'repeat-x')).toBe(
+        InterpretedSymbol.of('t'),
+      );
+    });
+
+    it('gpattern rejects the legacy numeric repetition flag', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gpattern', 'https://example.test/p.png', 1)).toBe(Cons.nil);
+    });
+
+    const invalidEnumCases: Array<{ name: string; args: LispValue[] }> = [
+      { name: 'gline-cap', args: ['bogus'] },
+      { name: 'gline-join', args: ['bogus'] },
+      { name: 'gtext-align', args: ['bogus'] },
+      { name: 'gtext-baseline', args: ['bogus'] },
+      { name: 'gtext-direction', args: ['bogus'] },
+      { name: 'gcomposite', args: ['bogus'] },
+      { name: 'gfont-kerning', args: ['bogus'] },
+      { name: 'gfont-stretch', args: ['bogus'] },
+      { name: 'gfont-variant', args: ['bogus'] },
+      { name: 'gtext-rendering', args: ['bogus'] },
+      { name: 'gpattern', args: ['src', 'bogus'] },
+    ];
+
+    it.each(invalidEnumCases)('$name rejects a value outside the allowlist', ({ name, args }) => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, name, ...args)).toBe(Cons.nil);
+    });
+  });
+
   describe('error paths', () => {
     describe('closed canvas', () => {
-      // Iterator helpers (`keys().map().toArray()`) are not typed under the
-      // ES2022 lib this project compiles against, so spread the iterator.
-      // eslint-disable-next-line unicorn/prefer-iterator-to-array
-      const closedSymbols = [...GraphicsPlugin.buildInFunctions.keys()]
-        .map(String)
-        .filter((name) => name !== 'gopen');
+      const closedSymbols = GraphicsPlugin.functionNames().filter((name) => name !== 'gopen');
 
       it.each(closedSymbols)('%s returns nil when the canvas is closed', (name) => {
         const { plugin } = makePlugin();

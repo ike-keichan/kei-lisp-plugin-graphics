@@ -7,6 +7,14 @@ mismatch, or canvas not open) — except the value-returning functions
 `gis-point-in-stroke`), which return their documented value on success and
 `nil` on failure.
 
+Enum-string setters (`gline-cap`, `gline-join`, `gtext-align`,
+`gtext-baseline`, `gtext-direction`, `gcomposite`, `gfont-kerning`,
+`gfont-stretch`, `gfont-variant`, `gtext-rendering`, `gimage-smoothing`, and
+`gpattern`'s repetition) validate their argument against the Canvas API's
+allowed values and return `nil` with a diagnostic for anything else.
+Diagnostics are written to `process.stderr` (kei-lisp convention); browser
+hosts typically redirect this to their output panel.
+
 ## Lifecycle
 
 | Function  | Arguments    | Description                                                |
@@ -53,25 +61,25 @@ mismatch, or canvas not open) — except the value-returning functions
 
 ## Style
 
-| Function            | Arguments                                                      | Description                                                                           |
-| ------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `gcolor`            | `color: string`                                                | Set both fill and stroke color                                                        |
-| `gfill-color`       | `color: string`                                                | Set fill color (`fillStyle`)                                                          |
-| `gstroke-color`     | `color: string`                                                | Set stroke color (`strokeStyle`)                                                      |
-| `gline-width`       | `width: number`                                                | Set line width                                                                        |
-| `gline-cap`         | `cap: string`                                                  | Set line cap (`"butt"` / `"round"` / `"square"`)                                      |
-| `gline-join`        | `join: string`                                                 | Set line join (`"miter"` / `"round"` / `"bevel"`)                                     |
-| `galpha`            | `alpha: number`                                                | Set global alpha (0.0–1.0)                                                            |
-| `gpattern`          | `image: image, repetition: string`                             | Set fill style to a canvas pattern                                                    |
-| `gline-dash`        | `seg1: number, seg2: number, ...`                              | Set the line dash pattern (`setLineDash`); no arguments clears it                     |
-| `gline-dash-offset` | `offset: number`                                               | Set the dash offset (`lineDashOffset`)                                                |
-| `gmiter-limit`      | `limit: number`                                                | Set the miter limit (`miterLimit`)                                                    |
-| `gcomposite`        | `op: string`                                                   | Set the compositing operation (`globalCompositeOperation`, e.g. `"multiply"`)         |
-| `gfilter`           | `filter: string`                                               | Set the CSS filter (`ctx.filter`, e.g. `"blur(2px)"`)                                 |
-| `gimage-smoothing`  | `quality: string`                                              | `"off"` disables smoothing; `"low"` / `"medium"` / `"high"` enable it at that quality |
-| `glinear-gradient`  | `x0, y0, x1, y1, offset1: number, color1: string, ...`         | Set fill and stroke style to a linear gradient (≥ 1 offset/color pair)                |
-| `gradial-gradient`  | `x0, y0, r0, x1, y1, r1, offset1: number, color1: string, ...` | Set fill and stroke style to a radial gradient                                        |
-| `gconic-gradient`   | `angle: number, x, y, offset1: number, color1: string, ...`    | Set fill and stroke style to a conic gradient; `angle` in degrees                     |
+| Function            | Arguments                                                      | Description                                                                                   |
+| ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `gcolor`            | `color: string`                                                | Set both fill and stroke color                                                                |
+| `gfill-color`       | `color: string`                                                | Set fill color (`fillStyle`)                                                                  |
+| `gstroke-color`     | `color: string`                                                | Set stroke color (`strokeStyle`)                                                              |
+| `gline-width`       | `width: number`                                                | Set line width                                                                                |
+| `gline-cap`         | `cap: string`                                                  | Set line cap (`"butt"` / `"round"` / `"square"`)                                              |
+| `gline-join`        | `join: string`                                                 | Set line join (`"miter"` / `"round"` / `"bevel"`)                                             |
+| `galpha`            | `alpha: number`                                                | Set global alpha (0.0–1.0)                                                                    |
+| `gpattern`          | `src: string, repetition: string`                              | Set fill style to an image pattern (`"repeat"` / `"repeat-x"` / `"repeat-y"` / `"no-repeat"`) |
+| `gline-dash`        | `seg1: number, seg2: number, ...`                              | Set the line dash pattern (`setLineDash`); no arguments clears it                             |
+| `gline-dash-offset` | `offset: number`                                               | Set the dash offset (`lineDashOffset`)                                                        |
+| `gmiter-limit`      | `limit: number`                                                | Set the miter limit (`miterLimit`)                                                            |
+| `gcomposite`        | `op: string`                                                   | Set the compositing operation (`globalCompositeOperation`, e.g. `"multiply"`)                 |
+| `gfilter`           | `filter: string`                                               | Set the CSS filter (`ctx.filter`, e.g. `"blur(2px)"`)                                         |
+| `gimage-smoothing`  | `quality: string`                                              | `"off"` disables smoothing; `"low"` / `"medium"` / `"high"` enable it at that quality         |
+| `glinear-gradient`  | `x0, y0, x1, y1, offset1: number, color1: string, ...`         | Set fill and stroke style to a linear gradient (≥ 1 offset/color pair)                        |
+| `gradial-gradient`  | `x0, y0, r0, x1, y1, r1, offset1: number, color1: string, ...` | Set fill and stroke style to a radial gradient                                                |
+| `gconic-gradient`   | `angle: number, x, y, offset1: number, color1: string, ...`    | Set fill and stroke style to a conic gradient; `angle` in degrees                             |
 
 ## Shadow
 
@@ -84,22 +92,26 @@ mismatch, or canvas not open) — except the value-returning functions
 
 ## Text
 
-| Function          | Arguments           | Description                                                                                         |
-| ----------------- | ------------------- | --------------------------------------------------------------------------------------------------- |
-| `gtext-font`      | `font: string`      | Set the font string (e.g. `"16px sans-serif"`)                                                      |
-| `gtext-align`     | `align: string`     | Set text alignment (`"left"` / `"center"` / `"right"` / ...)                                        |
-| `gtext-line`      | `baseline: string`  | Set text baseline (`"top"` / `"middle"` / `"alphabetic"` / `"bottom"` / ...)                        |
-| `gtext-dire`      | `direction: string` | Set text direction (`"ltr"` / `"rtl"` / `"inherit"`)                                                |
-| `gmeasure-text`   | `text: string`      | Return the width of `text` in pixels (number)                                                       |
-| `gletter-spacing` | `spacing: string`   | Set letter spacing (e.g. `"2px"`)                                                                   |
-| `gword-spacing`   | `spacing: string`   | Set word spacing (e.g. `"4px"`)                                                                     |
-| `gfont-kerning`   | `kerning: string`   | Set font kerning (`"auto"` / `"normal"` / `"none"`)                                                 |
-| `gfont-stretch`   | `stretch: string`   | Set font stretch (`"condensed"` / `"normal"` / `"expanded"` / ...)                                  |
-| `gfont-variant`   | `variant: string`   | Set font variant caps (`"normal"` / `"small-caps"` / ...)                                           |
-| `gtext-rendering` | `mode: string`      | Set text rendering (`"auto"` / `"optimizeSpeed"` / `"optimizeLegibility"` / `"geometricPrecision"`) |
+| Function          | Arguments           | Description                                                                                            |
+| ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `gtext-font`      | `font: string`      | Set the font string (e.g. `"16px sans-serif"`)                                                         |
+| `gtext-align`     | `align: string`     | Set text alignment (`"left"` / `"center"` / `"right"` / ...)                                           |
+| `gtext-baseline`  | `baseline: string`  | Set text baseline (`"top"` / `"hanging"` / `"middle"` / `"alphabetic"` / `"ideographic"` / `"bottom"`) |
+| `gtext-direction` | `direction: string` | Set text direction (`"ltr"` / `"rtl"` / `"inherit"`)                                                   |
+| `gmeasure-text`   | `text: string`      | Return the width of `text` in pixels (number)                                                          |
+| `gletter-spacing` | `spacing: string`   | Set letter spacing (e.g. `"2px"`)                                                                      |
+| `gword-spacing`   | `spacing: string`   | Set word spacing (e.g. `"4px"`)                                                                        |
+| `gfont-kerning`   | `kerning: string`   | Set font kerning (`"auto"` / `"normal"` / `"none"`)                                                    |
+| `gfont-stretch`   | `stretch: string`   | Set font stretch (`"condensed"` / `"normal"` / `"expanded"` / ...)                                     |
+| `gfont-variant`   | `variant: string`   | Set font variant caps (`"normal"` / `"small-caps"` / ...)                                              |
+| `gtext-rendering` | `mode: string`      | Set text rendering (`"auto"` / `"optimizeSpeed"` / `"optimizeLegibility"` / `"geometricPrecision"`)    |
 
 `gfill-text` and `gstroke-text` also accept an optional fourth argument
 `maxWidth: number` that scales the text to fit within that width.
+
+`gtext-line` and `gtext-dire` are deprecated aliases of `gtext-baseline` and
+`gtext-direction`, kept for backward compatibility with the legacy Graphist
+names.
 
 ## Transform
 

@@ -21,6 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gfill-text` / `gstroke-text` に第4引数 `maxWidth` を追加（#31）
 - 値を返す関数（`gwidth` / `gheight` / `gmeasure-text` / `gpixel` /
   `gis-point-in-path` / `gis-point-in-stroke`）の戻り値規約を docs に明文化（#31）
+- `gtext-baseline` / `gtext-direction` を正式名として追加
+  （旧名 `gtext-line` / `gtext-dire` は deprecated エイリアスとして継続動作、#32）
+- `GraphicsPlugin.functionNames()` — 登録済み Lisp 関数名の一覧を返す static メソッドを追加（#32）
+
+### Changed
+
+- **Breaking:** `gpattern` の第2引数を数値フラグから Canvas API と同じ文字列
+  （`"repeat"` / `"repeat-x"` / `"repeat-y"` / `"no-repeat"`）に変更。
+  ドキュメントは以前から文字列と記載しており、実装を追従（#32）
+- **Breaking (TypeScript API):** ディスパッチテーブルを非公開化
+  （public static だった `buildInFunctions`（typo・mutable）と `setup` /
+  `selectProcedure` / `buildInFunction` を削除し、`apply` 内部に統合。
+  一覧が必要な場合は新設の `functionNames()` を使用）（#32）
+- 列挙文字列を受け取る全関数（`gline-cap` / `gline-join` / `gtext-align` /
+  `gtext-baseline` / `gtext-direction` / `gcomposite` / `gfont-*` /
+  `gtext-rendering` / `gpattern` の repetition）で許容値リストによる検証を導入。
+  不正値は期待値を示す診断メッセージ + `nil` を返す（#32）
+- `GraphicsPlugin` の無意味な `extends Object` を削除（#32）
 
 ## [2.0.0] - 2026-07-04
 
