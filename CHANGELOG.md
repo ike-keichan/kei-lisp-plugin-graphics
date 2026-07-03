@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- DX・コミュニティ整備（#20）
+  - `SECURITY.md` — GitHub の private vulnerability reporting を窓口とする
+    脆弱性報告ポリシーを追加
+  - `CODE_OF_CONDUCT.md` — Contributor Covenant v2.1 ベースの行動規範を追加
+  - `.github/ISSUE_TEMPLATE/` — バグ報告・機能要望・質問の issue form と
+    `config.yml`（blank issue 無効化・セキュリティ報告への誘導）を追加
+  - `examples/` — ブラウザ（Vite）で動かす基本描画サンプル
+    （矩形・円・三角形・テキスト・変形・`gsave-png` ダウンロード）を追加。
+    kei-lisp と同様に `tsconfig.json` / ESLint / cspell / Prettier の
+    チェック対象に含めた
+- README に、本プロジェクトがおもちゃ（hobby）プロジェクトであり
+  プロダクション用途は非推奨である旨の注意書きを追加
+- README / CONTRIBUTING に、個人プロジェクトのため issue での報告は歓迎するが
+  外部からの pull request は原則受け付けない旨を明記
+
 - `@vitest/coverage-v8` によるテストカバレッジ計測を導入（#19）
   - `pnpm test:coverage` スクリプトと `vitest.config.js` の coverage 設定を追加
   - CI の tests ジョブをカバレッジ計測付き（`pnpm test:coverage`）に変更
