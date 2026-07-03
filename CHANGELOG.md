@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `@vitest/coverage-v8` によるテストカバレッジ計測を導入（#19）
+  - `pnpm test:coverage` スクリプトと `vitest.config.js` の coverage 設定を追加
+  - CI の tests ジョブをカバレッジ計測付き（`pnpm test:coverage`）に変更
+- エラーパスのテストを追加（#19）。全 `g…` 関数について、canvas がクローズ状態のとき・
+  引数の型が不一致のとき・引数の個数が不一致のときに `nil` を返すことを検証
+- CJS ビルド（`dist/index.cjs`）を `require()` で読み込めることを確認する
+  スモークテストを追加（#19）
+
 ### Changed
 
 - **Breaking:** `gline-cap` / `gline-join` が数値フラグ（0 / 正 / 負）ではなく

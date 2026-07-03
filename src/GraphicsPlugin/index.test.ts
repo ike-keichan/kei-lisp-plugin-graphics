@@ -736,6 +736,122 @@ describe('GraphicsPlugin', () => {
     });
   });
 
+  describe('error paths', () => {
+    describe('closed canvas', () => {
+      // Iterator helpers (`keys().map().toArray()`) are not typed under the
+      // ES2022 lib this project compiles against, so spread the iterator.
+      // eslint-disable-next-line unicorn/prefer-iterator-to-array
+      const closedSymbols = [...GraphicsPlugin.buildInFunctions.keys()]
+        .map(String)
+        .filter((name) => name !== 'gopen');
+
+      it.each(closedSymbols)('%s returns nil when the canvas is closed', (name) => {
+        const { plugin } = makePlugin();
+        const result = plugin.apply(InterpretedSymbol.of(name), Cons.nil, makeContext());
+        expect(result).toBe(Cons.nil);
+      });
+    });
+
+    describe('type mismatch', () => {
+      const typeMismatchCases: Array<{ name: string; args: LispValue[] }> = [
+        { name: 'galpha', args: ['x'] },
+        { name: 'garc', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'garc-to', args: [1, 2, 3, 4, 'x'] },
+        { name: 'gbezcurve-to', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'gfill-rect', args: [1, 2, 3, 'x'] },
+        { name: 'gfill-text', args: [42, 1, 2] },
+        { name: 'gfill-tri', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'gimage', args: [42, 1, 2] },
+        { name: 'gmove-to', args: [1, 'x'] },
+        { name: 'gline-to', args: [1, 'x'] },
+        { name: 'gline-cap', args: [1] },
+        { name: 'gline-join', args: [1] },
+        { name: 'gline-width', args: ['x'] },
+        { name: 'gpattern', args: [1, 2] },
+        { name: 'gquadcurve-to', args: [1, 2, 3, 'x'] },
+        { name: 'gsave-jpeg', args: [1] },
+        { name: 'gsave-png', args: [1] },
+        { name: 'gscale', args: [1, 'x'] },
+        { name: 'gshadow-blur', args: ['x'] },
+        { name: 'gshadow-offsetx', args: ['x'] },
+        { name: 'gshadow-offsety', args: ['x'] },
+        { name: 'gsleep', args: ['x'] },
+        { name: 'gstroke-rect', args: [1, 2, 3, 'x'] },
+        { name: 'gstroke-text', args: [42, 1, 2] },
+        { name: 'gstroke-tri', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'gtext-align', args: [1] },
+        { name: 'gtext-dire', args: [1] },
+        { name: 'gtext-font', args: [1] },
+        { name: 'gtext-line', args: [1] },
+        { name: 'gtranslate', args: [1, 'x'] },
+        { name: 'grect', args: [1, 2, 3, 'x'] },
+        { name: 'grotate', args: ['x'] },
+      ];
+
+      it.each(typeMismatchCases)(
+        '$name returns nil for a type-mismatched argument',
+        ({ name, args }) => {
+          const { plugin } = makePlugin();
+          plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+          const result = plugin.apply(
+            InterpretedSymbol.of(name),
+            arguments_(...args),
+            makeContext(),
+          );
+          expect(result).toBe(Cons.nil);
+        },
+      );
+    });
+
+    describe('wrong arity', () => {
+      const arityCases: Array<{ name: string; args: LispValue[] }> = [
+        { name: 'galpha', args: [0.5, 0.5] },
+        { name: 'garc', args: [1, 2, 3, 4, 5] },
+        { name: 'garc-to', args: [1, 2, 3, 4] },
+        { name: 'gbezcurve-to', args: [1, 2, 3, 4, 5] },
+        { name: 'gcolor', args: [] },
+        { name: 'gfill-color', args: [] },
+        { name: 'gfill-rect', args: [1, 2, 3] },
+        { name: 'gfill-text', args: ['a', 1] },
+        { name: 'gfill-tri', args: [1, 2, 3, 4, 5] },
+        { name: 'gimage', args: ['src', 1] },
+        { name: 'gmove-to', args: [1] },
+        { name: 'gline-to', args: [1] },
+        { name: 'gline-cap', args: ['butt', 'round'] },
+        { name: 'gline-join', args: ['miter', 'bevel'] },
+        { name: 'gline-width', args: [1, 2] },
+        { name: 'gpattern', args: ['src'] },
+        { name: 'gquadcurve-to', args: [1, 2, 3] },
+        { name: 'gsave-jpeg', args: ['a', 'b'] },
+        { name: 'gsave-png', args: ['a', 'b'] },
+        { name: 'gscale', args: [1] },
+        { name: 'gshadow-blur', args: [1, 2] },
+        { name: 'gshadow-color', args: [] },
+        { name: 'gshadow-offsetx', args: [1, 2] },
+        { name: 'gshadow-offsety', args: [1, 2] },
+        { name: 'gsleep', args: [] },
+        { name: 'gstroke-color', args: [] },
+        { name: 'gstroke-rect', args: [1, 2, 3] },
+        { name: 'gstroke-text', args: ['a', 1] },
+        { name: 'gstroke-tri', args: [1, 2, 3, 4, 5] },
+        { name: 'gtext-align', args: ['left', 'right'] },
+        { name: 'gtext-dire', args: ['ltr', 'rtl'] },
+        { name: 'gtext-font', args: ['a', 'b'] },
+        { name: 'gtext-line', args: ['top', 'middle'] },
+        { name: 'gtranslate', args: [1] },
+        { name: 'grect', args: [1, 2, 3] },
+        { name: 'grotate', args: [1, 2] },
+      ];
+
+      it.each(arityCases)('$name returns nil for a wrong argument count', ({ name, args }) => {
+        const { plugin } = makePlugin();
+        plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+        const result = plugin.apply(InterpretedSymbol.of(name), arguments_(...args), makeContext());
+        expect(result).toBe(Cons.nil);
+      });
+    });
+  });
+
   describe('end-to-end via LispInterpreter', () => {
     let interpreter: LispInterpreter;
     let plugin: GraphicsPlugin;
