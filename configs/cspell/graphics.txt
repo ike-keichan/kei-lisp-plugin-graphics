@@ -43,6 +43,8 @@ gtransform
 gtranslate
 gwidth
 gword
+kernings
 offsetx
 offsety
 steelblue
+unicase
