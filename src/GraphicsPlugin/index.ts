@@ -1,11 +1,10 @@
-/* eslint-disable unicorn/prefer-add-event-listener,
-                  unicorn/prefer-math-min-max,
+/* eslint-disable unicorn/prefer-math-min-max,
                   sonarjs/no-nested-conditional,
                   sonarjs/no-duplicate-string */
 
 // These lint rules are disabled file-wide so the ported handlers can preserve
-// the legacy Graphist patterns (Image#onload, clamp ternaries, mode-flag
-// ternaries, repeated diagnostic strings) without per-line escape hatches.
+// the legacy Graphist patterns (clamp ternaries, mode-flag ternaries,
+// repeated diagnostic strings) without per-line escape hatches.
 
 import type { KeiLispPlugin, LispValue, PluginContext } from 'kei-lisp';
 import { Cons, InterpretedSymbol } from 'kei-lisp';
@@ -205,6 +204,13 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   /**
+   * Loaded-image cache shared by `gimage` and `gpattern`. Repeated draws of
+   * the same `src` reuse the loaded element and run synchronously, so they
+   * keep their place in the drawing order instead of racing the load.
+   */
+  readonly #imageCache = new Map<string, HTMLImageElement>();
+
+  /**
    * Plugin identifier, used for diagnostics.
    */
   readonly name: string = 'graphics';
@@ -225,16 +231,49 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   /**
-   * Writes a diagnostic line directly to `process.stderr`, matching the
-   * convention used by kei-lisp itself (`Applier.format` writes to
-   * `process.stdout`). In a Node runtime this hits the real stderr; in a
-   * browser kei-lisp host (e.g. kei-lisp-web) the host typically swaps
-   * `process.stderr.write` for a sink that routes to the REPL output panel,
-   * so the same call reaches the user via the host's normal output channel.
+   * Writes a diagnostic line to `process.stderr`, matching the convention
+   * used by kei-lisp itself (`Applier.format` writes to `process.stdout`).
+   * In a Node runtime this hits the real stderr; in a browser kei-lisp host
+   * (e.g. kei-lisp-web) the host typically swaps `process.stderr.write` for
+   * a sink that routes to the REPL output panel. In a plain browser with no
+   * `process` shim at all, the line falls back to `console.error` instead of
+   * throwing.
    * @param line - the line to write
    */
   #print(line: string): void {
-    process.stderr.write(line + '\n');
+    const stderr = (globalThis as { process?: { stderr?: { write?: (chunk: string) => boolean } } })
+      .process?.stderr;
+    if (typeof stderr?.write === 'function') {
+      stderr.write(line + '\n');
+      return;
+    }
+    console.error(line);
+  }
+
+  /**
+   * Resolves an image for the given source and runs `draw` with it —
+   * synchronously when the image is already loaded, on its `load` event
+   * otherwise. A load failure prints a diagnostic once.
+   * @param source - the image URL / data URI
+   * @param draw - the drawing action to run once the image is available
+   */
+  #withImage(source: string, draw: (image: HTMLImageElement) => void): void {
+    const cached = this.#imageCache.get(source);
+    const image = cached ?? new Image();
+    if (cached === undefined) {
+      image.src = source;
+      this.#imageCache.set(source, image);
+      image.addEventListener('error', () => {
+        this.#print(`Can not load image: ${source}`);
+      });
+    }
+    if (image.complete) {
+      draw(image);
+      return;
+    }
+    image.addEventListener('load', () => {
+      draw(image);
+    });
   }
 
   /**
@@ -612,21 +651,15 @@ export class GraphicsPlugin implements KeiLispPlugin {
     return Cons.nil;
   }
 
-  gClear(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.fillStyle = '#000000';
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not clear.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+  gClear(arguments_: Cons): LispValue {
+    return this.#execute('Can not clear.', (context) => {
+      const aColor = arguments_.length() === 0 ? '#ffffff' : this.selectColor(arguments_);
+      const previous = context.fillStyle;
+      context.fillStyle = aColor;
+      context.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      context.fillStyle = previous;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gClose(): LispValue {
@@ -804,60 +837,23 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   gImage(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        const length_ = arguments_.length();
-        if (length_ === 3) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
-            const context = this.ctx;
-            const anImage = new Image();
-            anImage.src = a0;
-            anImage.onload = () => {
-              context.drawImage(anImage, a1, a2);
-            };
-            return InterpretedSymbol.of('t');
-          }
-        } else if (length_ === 5) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          if (
-            Cons.isString(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4)
-          ) {
-            const context = this.ctx;
-            const anImage = new Image();
-            anImage.src = a0;
-            anImage.onload = () => {
-              context.drawImage(anImage, a1, a2, a3, a4);
-            };
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw Image.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw Image.');
-        return Cons.nil;
+    return this.#execute('Can not draw Image.', (context) => {
+      const length_ = arguments_.length();
+      if (length_ !== 3 && length_ !== 5) return null;
+      const [a0, a1, a2, a3, a4] = this.#listValues(arguments_);
+      if (!Cons.isString(a0) || !Cons.isNumber(a1) || !Cons.isNumber(a2)) return null;
+      if (length_ === 5) {
+        if (!Cons.isNumber(a3) || !Cons.isNumber(a4)) return null;
+        this.#withImage(a0, (image) => {
+          context.drawImage(image, a1, a2, a3, a4);
+        });
+      } else {
+        this.#withImage(a0, (image) => {
+          context.drawImage(image, a1, a2);
+        });
       }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gLineTo(arguments_: Cons): LispValue {
@@ -976,13 +972,14 @@ export class GraphicsPlugin implements KeiLispPlugin {
         if (arguments_.length() !== 2) return null;
         const [a0, a1] = this.#listValues(arguments_);
         if (!Cons.isString(a0) || !Cons.isString(a1) || !PATTERN_REPETITIONS.has(a1)) return null;
-        const anImage = new Image();
-        anImage.src = a0;
-        anImage.onload = () => {
-          // Legacy bug: createPattern() may return null; assigning null to fillStyle
-          // is a no-op in practice (browsers ignore or coerce it).
-          context.fillStyle = context.createPattern(anImage, a1) as CanvasPattern;
-        };
+        this.#withImage(a0, (image) => {
+          const pattern = context.createPattern(image, a1);
+          if (pattern === null) {
+            this.#print('Can not set pattern. The image could not be used as a pattern.');
+            return;
+          }
+          context.fillStyle = pattern;
+        });
         return InterpretedSymbol.of('t');
       },
     );

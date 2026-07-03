@@ -17,15 +17,15 @@ hosts typically redirect this to their output panel.
 
 ## Lifecycle
 
-| Function  | Arguments    | Description                                                |
-| --------- | ------------ | ---------------------------------------------------------- |
-| `gopen`   | —            | Open the canvas (acquire 2D context, set `isOpen` to true) |
-| `gclose`  | —            | Close the canvas                                           |
-| `gclear`  | —            | Clear the entire canvas (paints it white)                  |
-| `greset`  | —            | Reset the context to its default state (`ctx.reset`)       |
-| `gwidth`  | —            | Return the canvas width in pixels (number)                 |
-| `gheight` | —            | Return the canvas height in pixels (number)                |
-| `gsleep`  | `ms: number` | Pause execution for `ms` milliseconds                      |
+| Function  | Arguments    | Description                                                                                                        |
+| --------- | ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `gopen`   | —            | Open the canvas (acquire 2D context, set `isOpen` to true)                                                         |
+| `gclose`  | —            | Close the canvas                                                                                                   |
+| `gclear`  | — or `color` | Paint the entire canvas white, or with the given color (string / RGB / RGBA); the current `fillStyle` is preserved |
+| `greset`  | —            | Reset the context to its default state (`ctx.reset`)                                                               |
+| `gwidth`  | —            | Return the canvas width in pixels (number)                                                                         |
+| `gheight` | —            | Return the canvas height in pixels (number)                                                                        |
+| `gsleep`  | `ms: number` | Pause execution for `ms` milliseconds (busy-wait: blocks the thread and burns CPU — avoid long sleeps)             |
 
 ## Path
 
@@ -144,3 +144,8 @@ names.
 | `gclear-rect` | `x: number, y: number, w: number, h: number`              | Erase a rectangle to transparent black (`clearRect`)                                                                         |
 | `gpixel`      | `x: number, y: number`                                    | Return the pixel at (`x`, `y`) as an `(r g b a)` list                                                                        |
 | `gset-pixel`  | `x: number, y: number, r, g, b, a: number`                | Write a single pixel (0–255 per channel)                                                                                     |
+
+`gimage` and `gpattern` load their image asynchronously on first use and cache
+it per plugin instance: the first draw for a given `src` happens when the image
+finishes loading (later drawing calls may paint over or under it), while
+subsequent draws of the same `src` run synchronously in drawing order.

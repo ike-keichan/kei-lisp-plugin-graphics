@@ -40,6 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   不正値は期待値を示す診断メッセージ + `nil` を返す（#32）
 - `GraphicsPlugin` の無意味な `extends Object` を削除（#32）
 
+### Fixed
+
+- `gpattern`: `createPattern()` が null を返した場合に型キャストで握りつぶしていた
+  レガシーバグを修正し、診断メッセージを出力するように変更（#33）
+- `#print` が `process.stderr` の無い素のブラウザで例外になっていたのを、
+  `console.error` へのフォールバックで解消。shim なしでも動作する（#33）
+- `gimage` / `gpattern` にロード済み画像のキャッシュを導入。同一 `src` の
+  2回目以降の描画は同期実行され、描画順が保たれる。ロード失敗時は診断を出力（#33）
+- `gclear` に任意色の指定を追加（引数なしは従来どおり白）。また実行後に
+  `fillStyle` を黒へ強制リセットしていたのをやめ、直前の値を復元するように変更（#33）
+- `gsleep` が busy-wait でスレッドをブロックする旨を docs に明記（#33）
+
 ## [2.0.0] - 2026-07-04
 
 ### Added

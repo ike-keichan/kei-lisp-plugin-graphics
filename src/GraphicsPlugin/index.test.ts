@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LispValue, PluginContext } from 'kei-lisp';
 import { Cons, InterpretedSymbol, LispInterpreter, StreamManager } from 'kei-lisp';
@@ -1001,6 +1001,124 @@ describe('GraphicsPlugin', () => {
       const { plugin, ctx } = openPlugin();
       call(plugin, 'gstroke-text', 'hi', 5, 15, 100);
       expect(ctx.strokeText).toHaveBeenCalledWith('hi', 5, 15, 100);
+    });
+  });
+
+  describe('robustness fixes (#33)', () => {
+    /** Instances created through the stubbed global Image, in order. */
+    let createdImages: Array<EventTarget & { src: string; complete: boolean }>;
+
+    beforeEach(() => {
+      createdImages = [];
+      const captured = createdImages;
+      vi.stubGlobal(
+        'Image',
+        class extends EventTarget {
+          src = '';
+          complete = false;
+          constructor() {
+            super();
+            captured.push(this);
+          }
+        },
+      );
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('gimage draws once the image load event fires', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gimage', 'https://example.test/a.png', 1, 2);
+      expect(ctx.drawImage).not.toHaveBeenCalled();
+      createdImages[0].complete = true;
+      createdImages[0].dispatchEvent(new Event('load'));
+      expect(ctx.drawImage).toHaveBeenCalledWith(createdImages[0], 1, 2);
+    });
+
+    it('gimage reuses the cached image and draws synchronously on repeat', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gimage', 'https://example.test/a.png', 1, 2);
+      createdImages[0].complete = true;
+      createdImages[0].dispatchEvent(new Event('load'));
+      call(plugin, 'gimage', 'https://example.test/a.png', 5, 6, 30, 40);
+      expect(ctx.drawImage).toHaveBeenCalledWith(createdImages[0], 5, 6, 30, 40);
+      expect(createdImages).toHaveLength(1);
+    });
+
+    it('prints a diagnostic when the image fails to load', () => {
+      const { plugin } = openPlugin();
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        call(plugin, 'gimage', 'https://example.test/broken.png', 1, 2);
+        createdImages[0].dispatchEvent(new Event('error'));
+        expect(spy).toHaveBeenCalledWith('Can not load image: https://example.test/broken.png\n');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('gpattern prints a diagnostic instead of assigning a null pattern', () => {
+      const { plugin, ctx } = openPlugin();
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        call(plugin, 'gpattern', 'https://example.test/p.png', 'repeat');
+        createdImages[0].complete = true;
+        createdImages[0].dispatchEvent(new Event('load'));
+        expect(spy).toHaveBeenCalledWith(
+          'Can not set pattern. The image could not be used as a pattern.\n',
+        );
+        // gopen leaves fillStyle at '#000000'; the null pattern must not change it.
+        expect(ctx.fillStyle).toBe('#000000');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('gpattern installs the created pattern as fillStyle', () => {
+      const { plugin, ctx } = openPlugin();
+      const pattern = { kind: 'pattern' };
+      ctx.createPattern.mockReturnValue(pattern);
+      call(plugin, 'gpattern', 'https://example.test/p.png', 'repeat-y');
+      createdImages[0].complete = true;
+      createdImages[0].dispatchEvent(new Event('load'));
+      expect(ctx.createPattern).toHaveBeenCalledWith(createdImages[0], 'repeat-y');
+      expect(ctx.fillStyle).toBe(pattern);
+    });
+
+    it('#print falls back to console.error when no process shim exists', () => {
+      const { plugin } = makePlugin();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.stubGlobal('process', undefined);
+      try {
+        plugin.gAlpha(arguments_(0));
+        expect(consoleSpy).toHaveBeenCalledWith('The canvas is closed and cannot be executed.');
+      } finally {
+        consoleSpy.mockRestore();
+      }
+    });
+
+    it('gclear paints with the given color and restores the previous fillStyle', () => {
+      const { plugin, ctx } = openPlugin();
+      ctx.fillStyle = 'blue';
+      let seen = '';
+      ctx.fillRect.mockImplementation(() => {
+        seen = ctx.fillStyle;
+      });
+      expect(call(plugin, 'gclear', 'red')).toBe(InterpretedSymbol.of('t'));
+      expect(seen).toBe('red');
+      expect(ctx.fillStyle).toBe('blue');
+    });
+
+    it('gclear without arguments still paints white', () => {
+      const { plugin, ctx } = openPlugin();
+      let seen = '';
+      ctx.fillRect.mockImplementation(() => {
+        seen = ctx.fillStyle;
+      });
+      call(plugin, 'gclear');
+      expect(seen).toBe('#ffffff');
     });
   });
 
