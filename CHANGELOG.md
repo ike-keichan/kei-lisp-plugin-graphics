@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** `gline-cap` / `gline-join` が数値フラグ（0 / 正 / 負）ではなく
+  Canvas API と同じ文字列（`"butt"` / `"round"` / `"square"`、
+  `"miter"` / `"round"` / `"bevel"`）を受け取るように変更（#18）
+- **Breaking:** `gtext-dire` が数値フラグではなく `ctx.direction` と同じ文字列
+  （`"ltr"` / `"rtl"` / `"inherit"`）を受け取るように変更（#18）
+- `gsave-jpeg` / `gsave-png` に Node.js 向けのオーバーロード `path: string` を追加。
+  引数なしは従来どおりブラウザダウンロード（`toDataURL` + `<a download>`）で、
+  DOM や `toDataURL` が無い環境（Node.js / `OffscreenCanvas`）で引数なしで呼ぶと
+  例外に頼らず明示的なエラーメッセージを出力するように変更（#18）
+
 ## [1.1.0] - 2026-07-02
 
 ### Added
