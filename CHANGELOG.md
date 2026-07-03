@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-07-04
 
 ### Added
 
@@ -23,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   プロダクション用途は非推奨である旨の注意書きを追加
 - README / CONTRIBUTING に、個人プロジェクトのため issue での報告は歓迎するが
   外部からの pull request は原則受け付けない旨を明記
-
 - `@vitest/coverage-v8` によるテストカバレッジ計測を導入（#19）
   - `pnpm test:coverage` スクリプトと `vitest.config.js` の coverage 設定を追加
   - CI の tests ジョブをカバレッジ計測付き（`pnpm test:coverage`）に変更
