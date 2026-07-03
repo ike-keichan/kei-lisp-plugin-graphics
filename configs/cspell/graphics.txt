@@ -46,5 +46,6 @@ gword
 kernings
 offsetx
 offsety
+rgba
 steelblue
 unicase
