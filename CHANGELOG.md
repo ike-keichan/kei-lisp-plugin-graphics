@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fillStyle` を黒へ強制リセットしていたのをやめ、直前の値を復元するように変更（#33）
 - `gsleep` が busy-wait でスレッドをブロックする旨を docs に明記（#33）
 
+### Docs
+
+- README に描画例のスクリーンショット（`pnpm screenshot` で再生成可能）と
+  サポート環境マトリクス（ブラウザ / OffscreenCanvas / Node.js）を追加（#36）
+- GitHub Pages へライブデモ（examples）と TypeDoc を自動デプロイする
+  ワークフローを追加し、README からリンク（#36）
+- docs/graphics.md に使用例（グラデーション・変形・値を返す関数・保存）を追加（#36）
+
 ### Tests / CI
 
 - CI・リポジトリ運用を強化（#35）

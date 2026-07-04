@@ -19,6 +19,11 @@ interpreter. Register it on a `LispInterpreter` and call drawing primitives
 > are welcome, but external pull requests are generally **not accepted** —
 > see [CONTRIBUTING.md](./CONTRIBUTING.md).
 
+![Shapes and text drawn from Lisp source with kei-lisp-plugin-graphics](./docs/assets/basic-drawing.png)
+
+_The canvas above is painted entirely from Lisp source — try it in the
+[**live demo**](https://ike-keichan.github.io/kei-lisp-plugin-graphics/)._
+
 ## Features
 
 - 75 Canvas2D drawing primitives (`g…` symbols) callable directly from Lisp source
@@ -92,8 +97,20 @@ canvas's 2D rendering context.
 Each function returns `t` on success. See [`docs/graphics.md`](./docs/graphics.md)
 for argument signatures and side effects.
 
+## Environment support
+
+| Capability                            | Browser (`HTMLCanvasElement`)                            | `OffscreenCanvas` (worker) | Node.js (e.g. `@napi-rs/canvas`) |
+| ------------------------------------- | -------------------------------------------------------- | -------------------------- | -------------------------------- |
+| Drawing primitives (`g…`)             | ✅                                                       | ✅                         | ✅                               |
+| `gimage` / `gpattern` (image loading) | ✅                                                       | ⚠️ needs a global `Image`  | ❌ returns `nil`                 |
+| `gsave-png` / `gsave-jpeg` (download) | ✅                                                       | ❌ returns `nil`           | ❌ returns `nil`                 |
+| `gsave-png` / `gsave-jpeg` (`path`)   | ❌ returns `nil`                                         | ⚠️ async `convertToBlob`   | ✅                               |
+| Diagnostics                           | `console.error` (or host-provided `process.stderr` shim) | same                       | `process.stderr`                 |
+
 ## Reference
 
+- [Live demo](https://ike-keichan.github.io/kei-lisp-plugin-graphics/) — the examples, served from GitHub Pages
+- [API docs (TypeDoc)](https://ike-keichan.github.io/kei-lisp-plugin-graphics/api/) — generated API documentation
 - [API Reference](./docs/api.md) — TypeScript / JavaScript API
 - [Graphics Reference](./docs/graphics.md) — every `g…` Lisp function
 - [kei-lisp Plugin Guide](https://github.com/ike-keichan/kei-lisp/blob/main/docs/plugins.md) — how plugins integrate with the interpreter

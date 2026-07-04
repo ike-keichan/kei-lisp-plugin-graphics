@@ -61,7 +61,8 @@
     "fix:lint-config": "eslint ./*.{js,mjs} \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" --fix",
     "e2e": "pnpm build && node e2e/run.mjs",
     "check:package": "publint && attw --pack .",
-    "check:knip": "knip"
+    "check:knip": "knip",
+    "screenshot": "pnpm build && node e2e/screenshot.mjs"
   },
   "peerDependencies": {
     "kei-lisp": "^2.2.0"
