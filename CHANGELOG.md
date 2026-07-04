@@ -54,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Docs
 
+- `docs/non-goals.md` — 意図的に対応しない事項（プラグイン層の性能最適化・
+  ImageData 一括転送・DOM 結合 API・非同期描画・mutation testing・
+  ドキュメント多言語化・プロダクションサポート）とその理由を明文化（#37）
+
 - README に描画例のスクリーンショット（`pnpm screenshot` で再生成可能）と
   サポート環境マトリクス（ブラウザ / OffscreenCanvas / Node.js）を追加（#36）
 - GitHub Pages へライブデモ（examples）と TypeDoc を自動デプロイする

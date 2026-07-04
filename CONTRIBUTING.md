@@ -9,6 +9,8 @@ up the project locally and the conventions we follow.
 > are generally **not accepted** — the maintainer implements changes himself.
 > If you would like to see something changed, please open an issue and
 > discuss it first instead of writing code.
+> Also check [docs/non-goals.md](./docs/non-goals.md) — some requests are
+> deliberately out of scope.
 
 ## Development environment
 
