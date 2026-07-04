@@ -54,6 +54,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests / CI
 
+- CI・リポジトリ運用を強化（#35）
+  - CodeQL（code scanning）ワークフローを追加
+  - actionlint によるワークフロー自体の検証ジョブを追加
+  - knip による未使用 export / 未使用依存の検出（`check:knip`）を追加
+  - TypeDoc を警告ゼロ強制（`--treatWarningsAsErrors`）で CI 実行
+  - GitHub Release のノートを CHANGELOG の該当セクションから生成
+    （自動生成の PR リストは末尾に付記）
+  - CHANGELOG に compare リンクを追加
+  - `.editorconfig` を追加
+  - リポジトリ設定で secret scanning / push protection を有効化
+
 - カバレッジ補完（例外パス・save 系の全経路）とカバレッジ閾値
   （statements 94 / branches 90 / functions 100 / lines 98）を導入（#34）
 - publint / @arethetypeswrong/cli による ESM・CJS dual パッケージングの
@@ -185,3 +196,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   canvas is not open. The JavaScript source emitted the wrong message
   (`'The canvas has already been opened.'`) due to a copy-paste from
   `gOpen`'s double-open guard.
+
+[unreleased]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.1.0...v2.0.0
+[1.1.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/releases/tag/v1.0.0
