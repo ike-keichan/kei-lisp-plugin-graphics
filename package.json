@@ -60,7 +60,8 @@
     "fix:lint": "eslint \"./src/**/*.ts\" \"./examples/**/*.ts\" --fix",
     "fix:lint-config": "eslint ./*.{js,mjs} \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" --fix",
     "e2e": "pnpm build && node e2e/run.mjs",
-    "check:package": "publint && attw --pack ."
+    "check:package": "publint && attw --pack .",
+    "check:knip": "knip"
   },
   "peerDependencies": {
     "kei-lisp": "^2.2.0"
@@ -85,6 +86,7 @@
     "globals": "^17.6.0",
     "happy-dom": "^20.8.9",
     "kei-lisp": "^2.2.0",
+    "knip": "^6.24.0",
     "npm-run-all": "^4.1.5",
     "playwright": "^1.61.1",
     "prettier": "^3.8.3",

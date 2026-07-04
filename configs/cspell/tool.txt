@@ -9,7 +9,9 @@
 # 外部サービス
 # 開発ツール・npm パッケージ名の辞書
 SBCL
+actionlint
 classdesc
+knip
 napi
 networkidle
 nodenv
@@ -18,6 +20,7 @@ npmrc
 pnpm
 prepublish
 readline
+rhysd
 rolldown
 shims
 softprops
