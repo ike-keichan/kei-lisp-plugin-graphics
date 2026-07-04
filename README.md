@@ -113,6 +113,7 @@ for argument signatures and side effects.
 - [API docs (TypeDoc)](https://ike-keichan.github.io/kei-lisp-plugin-graphics/api/) — generated API documentation
 - [API Reference](./docs/api.md) — TypeScript / JavaScript API
 - [Graphics Reference](./docs/graphics.md) — every `g…` Lisp function
+- [Non-goals](./docs/non-goals.md) — what this project deliberately does not do
 - [kei-lisp Plugin Guide](https://github.com/ike-keichan/kei-lisp/blob/main/docs/plugins.md) — how plugins integrate with the interpreter
 
 ## Development
