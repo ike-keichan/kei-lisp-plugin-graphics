@@ -149,3 +149,42 @@ names.
 it per plugin instance: the first draw for a given `src` happens when the image
 finishes loading (later drawing calls may paint over or under it), while
 subsequent draws of the same `src` run synchronously in drawing order.
+
+## Examples
+
+Fill styles — gradients apply to both fill and stroke, like `gcolor`:
+
+```lisp
+(gopen)
+(glinear-gradient 0 0 200 0    0 "tomato"  1 "gold")
+(gfill-rect 20 20 180 90)
+(gradial-gradient 320 65 5   320 65 60   0 "white"  1 "steelblue")
+(gstart-path) (garc 320 65 45 0 360 1) (gfill)
+```
+
+Arcs and transforms — angles are always in degrees:
+
+```lisp
+(gsave)
+(gtranslate 200 150)
+(grotate 30)
+(gstroke-rect -40 -25 80 50)
+(grestore)                       ; the rotation stays local to gsave/grestore
+(gstart-path) (garc 200 150 70 0 270 1) (gstroke)
+```
+
+Reading values back — these functions return a value instead of `t`:
+
+```lisp
+(gwidth)                         ; => 640
+(gmeasure-text "Hello")          ; => 31.5 (pixels, depends on the font)
+(gpixel 10 10)                   ; => (255 255 255 255)
+(gis-point-in-path 200 150)      ; => t or nil
+```
+
+Saving — the no-argument form downloads in a browser; pass a path on Node.js:
+
+```lisp
+(gsave-png)                      ; browser: downloads "canvas.png"
+(gsave-png "out/canvas.png")     ; Node.js: writes the file synchronously
+```

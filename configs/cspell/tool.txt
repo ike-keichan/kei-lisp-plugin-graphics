@@ -32,4 +32,5 @@ tseslint
 typedoc
 unicorn
 unstub
+vite
 vitest
