@@ -52,6 +52,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fillStyle` を黒へ強制リセットしていたのをやめ、直前の値を復元するように変更（#33）
 - `gsleep` が busy-wait でスレッドをブロックする旨を docs に明記（#33）
 
+### Tests / CI
+
+- カバレッジ補完（例外パス・save 系の全経路）とカバレッジ閾値
+  （statements 94 / branches 90 / functions 100 / lines 98）を導入（#34）
+- publint / @arethetypeswrong/cli による ESM・CJS dual パッケージングの
+  機械検証を `pnpm check`（`check:package`）に追加（#34）
+- Playwright + 実 Chromium の E2E（`pnpm e2e`）を追加。examples を Vite で
+  ビルド・配信し、Lisp プログラムが描画したピクセル値を直接アサートする。
+  CI に専用ジョブを追加（#34）
+- @napi-rs/canvas による Node.js 統合テストを追加。実 Canvas 実装で
+  `(gsave-png path)` の PNG 出力・`gpixel` / `gset-pixel` の描画結果・
+  `gmeasure-text` を検証（モジュールが使えない環境では skip）（#34）
+- examples が素のブラウザで動かなかった問題を修正
+  （kei-lisp がモジュールスコープで import する node:module / node:vm /
+  node:v8 に対する Vite 用シムを examples に追加）（#34）
+
 ## [2.0.0] - 2026-07-04
 
 ### Added

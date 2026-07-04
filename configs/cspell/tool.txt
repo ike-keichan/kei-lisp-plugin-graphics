@@ -10,6 +10,8 @@
 # 開発ツール・npm パッケージ名の辞書
 SBCL
 classdesc
+napi
+networkidle
 nodenv
 npmjs
 npmrc

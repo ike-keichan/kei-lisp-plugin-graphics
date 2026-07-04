@@ -4,3 +4,5 @@ node_modules
 dist/
 docs/typedoc/
 coverage/
+examples/dist/
+examples/dist-e2e/

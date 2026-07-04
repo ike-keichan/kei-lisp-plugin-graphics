@@ -1328,6 +1328,160 @@ describe('GraphicsPlugin', () => {
     });
   });
 
+  describe('exception paths (#34)', () => {
+    type ThrowCase = { name: string; member: string; kind: 'method' | 'setter'; args: LispValue[] };
+    const throwCases: ThrowCase[] = [
+      { name: 'galpha', member: 'globalAlpha', kind: 'setter', args: [0.5] },
+      { name: 'garc', member: 'arc', kind: 'method', args: [1, 2, 3, 4, 5, 6] },
+      { name: 'garc-to', member: 'arcTo', kind: 'method', args: [1, 2, 3, 4, 5] },
+      { name: 'gbezcurve-to', member: 'bezierCurveTo', kind: 'method', args: [1, 2, 3, 4, 5, 6] },
+      { name: 'gclear', member: 'fillRect', kind: 'method', args: [] },
+      { name: 'gclose', member: 'clearRect', kind: 'method', args: [] },
+      { name: 'gcolor', member: 'fillStyle', kind: 'setter', args: ['red'] },
+      { name: 'gfill', member: 'fill', kind: 'method', args: [] },
+      { name: 'gfill-color', member: 'fillStyle', kind: 'setter', args: ['red'] },
+      { name: 'gfill-rect', member: 'fillRect', kind: 'method', args: [1, 2, 3, 4] },
+      { name: 'gfill-text', member: 'fillText', kind: 'method', args: ['a', 1, 2] },
+      { name: 'gfill-tri', member: 'moveTo', kind: 'method', args: [1, 2, 3, 4, 5, 6] },
+      { name: 'gfinish-path', member: 'closePath', kind: 'method', args: [] },
+      { name: 'gline-cap', member: 'lineCap', kind: 'setter', args: ['butt'] },
+      { name: 'gline-to', member: 'lineTo', kind: 'method', args: [1, 2] },
+      { name: 'gline-width', member: 'lineWidth', kind: 'setter', args: [2] },
+      { name: 'gmove-to', member: 'moveTo', kind: 'method', args: [1, 2] },
+      { name: 'gquadcurve-to', member: 'quadraticCurveTo', kind: 'method', args: [1, 2, 3, 4] },
+      { name: 'grect', member: 'rect', kind: 'method', args: [1, 2, 3, 4] },
+      { name: 'grotate', member: 'rotate', kind: 'method', args: [45] },
+      { name: 'gsave', member: 'save', kind: 'method', args: [] },
+      { name: 'grestore', member: 'restore', kind: 'method', args: [] },
+      { name: 'gscale', member: 'scale', kind: 'method', args: [2, 2] },
+      { name: 'gshadow-color', member: 'shadowColor', kind: 'setter', args: ['red'] },
+      { name: 'gstart-path', member: 'beginPath', kind: 'method', args: [] },
+      { name: 'gstroke', member: 'stroke', kind: 'method', args: [] },
+      { name: 'gstroke-color', member: 'strokeStyle', kind: 'setter', args: ['red'] },
+      { name: 'gstroke-rect', member: 'strokeRect', kind: 'method', args: [1, 2, 3, 4] },
+      { name: 'gstroke-text', member: 'strokeText', kind: 'method', args: ['a', 1, 2] },
+      { name: 'gstroke-tri', member: 'beginPath', kind: 'method', args: [1, 2, 3, 4, 5, 6] },
+      { name: 'gtext-font', member: 'font', kind: 'setter', args: ['16px serif'] },
+      { name: 'gtranslate', member: 'translate', kind: 'method', args: [1, 2] },
+      { name: 'gellipse', member: 'ellipse', kind: 'method', args: [1, 2, 3, 4, 5, 6, 7, 1] },
+    ];
+
+    it.each(throwCases)(
+      '$name returns nil when the context throws',
+      ({ name, member, kind, args }) => {
+        const { plugin, ctx } = openPlugin();
+        const target = ctx as unknown as Record<string, unknown>;
+        if (kind === 'method') {
+          target[member] = () => {
+            throw new Error('boom');
+          };
+        } else {
+          Object.defineProperty(target, member, {
+            set() {
+              throw new Error('boom');
+            },
+          });
+        }
+        expect(call(plugin, name, ...args)).toBe(Cons.nil);
+      },
+    );
+
+    it('gopen returns nil when the context throws during the initial clear', () => {
+      const { plugin } = makePlugin();
+      const target = plugin.ctx as unknown as Record<string, unknown>;
+      target.fillRect = () => {
+        throw new Error('boom');
+      };
+      expect(call(plugin, 'gopen')).toBe(Cons.nil);
+    });
+
+    it('gsleep busy-waits and returns t', () => {
+      const { plugin } = openPlugin();
+      const start = Date.now();
+      expect(call(plugin, 'gsleep', 5)).toBe(InterpretedSymbol.of('t'));
+      expect(Date.now() - start).toBeGreaterThanOrEqual(4);
+    });
+  });
+
+  describe('save path coverage (#34)', () => {
+    /** Builds a plugin around an OffscreenCanvas-like object (no toDataURL). */
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- only used by this describe block
+    function makeOffscreenPlugin(convertToBlob: () => Promise<unknown>): GraphicsPlugin {
+      const fake = {
+        width: 10,
+        height: 10,
+        getContext: () => makeFakeContext() as unknown as OffscreenCanvasRenderingContext2D,
+        convertToBlob,
+      } as unknown as OffscreenCanvas;
+      const plugin = new GraphicsPlugin(fake);
+      call(plugin, 'gopen');
+      return plugin;
+    }
+
+    it('gsave-png without toDataURL support returns nil with a guard message', () => {
+      const plugin = makeOffscreenPlugin(() => Promise.resolve({}));
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        expect(call(plugin, 'gsave-png')).toBe(Cons.nil);
+        expect(spy).toHaveBeenCalledWith(
+          'Can not save png. Browser download needs a DOM and an HTMLCanvasElement; pass a file path to save on Node.js.\n',
+        );
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('gsave-png writes via convertToBlob for an OffscreenCanvas-like canvas', async () => {
+      const payload = new TextEncoder().encode('png-bytes');
+      const plugin = makeOffscreenPlugin(() =>
+        Promise.resolve({ arrayBuffer: () => Promise.resolve(payload.buffer) }),
+      );
+      const directory = mkdtempSync(path.join(tmpdir(), 'graphics-plugin-'));
+      const filePath = path.join(directory, 'offscreen.png');
+      try {
+        expect(call(plugin, 'gsave-png', filePath)).toBe(InterpretedSymbol.of('t'));
+        await vi.waitFor(() => {
+          // eslint-disable-next-line security/detect-non-literal-fs-filename -- reads back the temp file this test created
+          expect(readFileSync(filePath, 'utf8')).toBe('png-bytes');
+        });
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
+    it('gsave-png with a path returns nil when Node fs is unavailable', () => {
+      const { plugin } = openPlugin();
+      const write = vi.fn().mockReturnValue(true);
+      vi.stubGlobal('process', { stderr: { write } });
+      try {
+        expect(call(plugin, 'gsave-png', 'never-written.png')).toBe(Cons.nil);
+        expect(write).toHaveBeenCalledWith(
+          'Can not save png. Saving to a file path requires Node.js.\n',
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('gsave-jpeg download returns nil when toDataURL throws (tainted canvas)', () => {
+      const { canvas, plugin } = makePlugin();
+      call(plugin, 'gopen');
+      canvas.toDataURL = () => {
+        throw new Error('tainted');
+      };
+      expect(call(plugin, 'gsave-jpeg')).toBe(Cons.nil);
+    });
+
+    it('gsave-jpeg with a path returns nil when toDataURL throws', () => {
+      const { canvas, plugin } = makePlugin();
+      call(plugin, 'gopen');
+      canvas.toDataURL = () => {
+        throw new Error('tainted');
+      };
+      expect(call(plugin, 'gsave-jpeg', 'never-written.jpeg')).toBe(Cons.nil);
+    });
+  });
+
   describe('end-to-end via LispInterpreter', () => {
     let interpreter: LispInterpreter;
     let plugin: GraphicsPlugin;
