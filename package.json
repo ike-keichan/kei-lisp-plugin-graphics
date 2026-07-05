@@ -1,6 +1,6 @@
 {
   "name": "kei-lisp-plugin-graphics",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Canvas2D graphics plugin for the kei-lisp interpreter",
   "author": "Keisuke Ikeda",
   "license": "MIT",

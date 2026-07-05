@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-07-05
+
+### Changed
+
+- CONTRIBUTING のブランチ戦略記述を kei-lisp 本体に揃えた
+  （通常のパッチリリースは `feature/*` → `main`、`hotfix/*` は緊急修正専用。
+  ダイアグラム・ブランチ表・作成責任表・PR テンプレートの文言も更新、#39）
+
+### Fixed
+
+- README のデモ表記を修正（Pages の example page は固定サンプルの実行結果表示で
+  あり、対話的に試す場としては kei-lisp-web へ誘導するように変更）
+- Deploy Pages ワークフローを build / deploy の2ジョブ構成に分割し、
+  一過性エラー時に「Re-run failed jobs」で復旧できるように修正
+
 ## [3.0.0] - 2026-07-04
 
 ### Added
@@ -208,7 +223,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`'The canvas has already been opened.'`) due to a copy-paste from
   `gOpen`'s double-open guard.
 
-[unreleased]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.0...HEAD
+[unreleased]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.0.1...v1.1.0
