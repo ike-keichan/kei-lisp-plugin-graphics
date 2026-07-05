@@ -55,15 +55,18 @@ single classes; lowercase directories group multiple related classes.
 
 ## Scripts
 
-| Command           | Description                                |
-| ----------------- | ------------------------------------------ |
-| `pnpm build`      | Build for distribution (CJS + ESM + types) |
-| `pnpm test`       | Run the test suite                         |
-| `pnpm test:watch` | Run tests in watch mode                    |
-| `pnpm doc`        | Generate API documentation with TypeDoc    |
-| `pnpm typecheck`  | Type check (`tsc --noEmit`)                |
-| `pnpm check`      | Run all checks (format / lint / spell)     |
-| `pnpm fix`        | Auto-fix format and lint issues            |
+| Command              | Description                                 |
+| -------------------- | ------------------------------------------- |
+| `pnpm build`         | Build for distribution (CJS + ESM + types)  |
+| `pnpm test`          | Run the test suite                          |
+| `pnpm test:coverage` | Run the test suite with coverage thresholds |
+| `pnpm test:watch`    | Run tests in watch mode                     |
+| `pnpm e2e`           | Browser E2E (Playwright + real Chromium)    |
+| `pnpm screenshot`    | Regenerate docs/assets/basic-drawing.png    |
+| `pnpm doc`           | Generate API documentation with TypeDoc     |
+| `pnpm typecheck`     | Type check (`tsc --noEmit`)                 |
+| `pnpm check`         | Run all checks (format / lint / spell)      |
+| `pnpm fix`           | Auto-fix format and lint issues             |
 
 ## Coding conventions
 
@@ -164,12 +167,22 @@ the workflow is a no-op, so it is safe to re-trigger.
 
 ### Maintainer steps
 
-1. On the release-line branch (`vX.Y`), update `CHANGELOG.md` — move pending
-   entries under a new `## [<new-version>] - <YYYY-MM-DD>` header.
+#### Minor / major release
+
+1. On the release-line branch (`vX.Y`), update `CHANGELOG.md` —
+   move pending entries under a new
+   `## [<new-version>] - <YYYY-MM-DD>` header.
 2. Bump `version` in `package.json` to match.
-3. Open a PR from the version branch to `main`, review, and merge.
+3. Open a PR from the release-line branch to `main`, review, and merge.
 4. The release workflow runs automatically on the resulting `main`
    push. No manual tagging required.
+
+#### Patch release
+
+1. Branch `feature/<description>` from `main`.
+2. Apply changes, update `CHANGELOG.md`, and bump `version` in `package.json`.
+3. Open a PR targeting `main`, review, and merge.
+4. The release workflow runs automatically.
 
 ### Required configuration
 
