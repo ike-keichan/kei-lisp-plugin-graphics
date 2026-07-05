@@ -37,8 +37,14 @@ To write and run kei-lisp yourself, use
 ## Installation
 
 ```sh
+# npm
+npm install kei-lisp-plugin-graphics kei-lisp
+
+# yarn
+yarn add kei-lisp-plugin-graphics kei-lisp
+
+# pnpm
 pnpm add kei-lisp-plugin-graphics kei-lisp
-# or: npm install kei-lisp-plugin-graphics kei-lisp
 ```
 
 `kei-lisp` is a **peer dependency**; install both into your project. Requires
