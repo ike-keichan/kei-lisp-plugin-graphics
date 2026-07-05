@@ -21,9 +21,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gfill-text` / `gstroke-text` に第4引数 `maxWidth` を追加（#31）
 - 値を返す関数（`gwidth` / `gheight` / `gmeasure-text` / `gpixel` /
   `gis-point-in-path` / `gis-point-in-stroke`）の戻り値規約を docs に明文化（#31）
-- `gtext-baseline` / `gtext-direction` を正式名として追加
-  （旧名 `gtext-line` / `gtext-dire` は deprecated エイリアスとして継続動作、#32）
+- `gtext-baseline` / `gtext-direction` を正式名として追加（#32）
 - `GraphicsPlugin.functionNames()` — 登録済み Lisp 関数名の一覧を返す static メソッドを追加（#32）
+
+- `docs/non-goals.md` — 意図的に対応しない事項（プラグイン層の性能最適化・
+  ImageData 一括転送・DOM 結合 API・非同期描画・mutation testing・
+  ドキュメント多言語化・プロダクションサポート）とその理由を明文化（#37）
+
+- README に描画例のスクリーンショット（`pnpm screenshot` で再生成可能）と
+  サポート環境マトリクス（ブラウザ / OffscreenCanvas / Node.js）を追加（#36）
+- GitHub Pages へライブデモ（examples）と TypeDoc を自動デプロイする
+  ワークフローを追加し、README からリンク（#36）
+- docs/graphics.md に使用例（グラデーション・変形・値を返す関数・保存）を追加（#36）
+- CI・リポジトリ運用を強化（#35）
+  - CodeQL（code scanning）ワークフローを追加
+  - actionlint によるワークフロー自体の検証ジョブを追加
+  - knip による未使用 export / 未使用依存の検出（`check:knip`）を追加
+  - TypeDoc を警告ゼロ強制（`--treatWarningsAsErrors`）で CI 実行
+  - GitHub Release のノートを CHANGELOG の該当セクションから生成
+    （自動生成の PR リストは末尾に付記）
+  - CHANGELOG に compare リンクを追加
+  - `.editorconfig` を追加
+  - リポジトリ設定で secret scanning / push protection を有効化
+
+- カバレッジ補完（例外パス・save 系の全経路）とカバレッジ閾値
+  （statements 94 / branches 90 / functions 100 / lines 98）を導入（#34）
+- publint / @arethetypeswrong/cli による ESM・CJS dual パッケージングの
+  機械検証を `pnpm check`（`check:package`）に追加（#34）
+- Playwright + 実 Chromium の E2E（`pnpm e2e`）を追加。examples を Vite で
+  ビルド・配信し、Lisp プログラムが描画したピクセル値を直接アサートする。
+  CI に専用ジョブを追加（#34）
+- @napi-rs/canvas による Node.js 統合テストを追加。実 Canvas 実装で
+  `(gsave-png path)` の PNG 出力・`gpixel` / `gset-pixel` の描画結果・
+  `gmeasure-text` を検証（モジュールが使えない環境では skip）（#34）
+- examples が素のブラウザで動かなかった問題を修正
+  （kei-lisp がモジュールスコープで import する node:module / node:vm /
+  node:v8 に対する Vite 用シムを examples に追加）（#34）
+
+### Deprecated
+
+- `gtext-line` / `gtext-dire` — `gtext-baseline` / `gtext-direction` の
+  deprecated エイリアスに変更（動作は継続。将来のメジャーで削除予定、#32）
 
 ### Changed
 
@@ -51,45 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gclear` に任意色の指定を追加（引数なしは従来どおり白）。また実行後に
   `fillStyle` を黒へ強制リセットしていたのをやめ、直前の値を復元するように変更（#33）
 - `gsleep` が busy-wait でスレッドをブロックする旨を docs に明記（#33）
-
-### Docs
-
-- `docs/non-goals.md` — 意図的に対応しない事項（プラグイン層の性能最適化・
-  ImageData 一括転送・DOM 結合 API・非同期描画・mutation testing・
-  ドキュメント多言語化・プロダクションサポート）とその理由を明文化（#37）
-
-- README に描画例のスクリーンショット（`pnpm screenshot` で再生成可能）と
-  サポート環境マトリクス（ブラウザ / OffscreenCanvas / Node.js）を追加（#36）
-- GitHub Pages へライブデモ（examples）と TypeDoc を自動デプロイする
-  ワークフローを追加し、README からリンク（#36）
-- docs/graphics.md に使用例（グラデーション・変形・値を返す関数・保存）を追加（#36）
-
-### Tests / CI
-
-- CI・リポジトリ運用を強化（#35）
-  - CodeQL（code scanning）ワークフローを追加
-  - actionlint によるワークフロー自体の検証ジョブを追加
-  - knip による未使用 export / 未使用依存の検出（`check:knip`）を追加
-  - TypeDoc を警告ゼロ強制（`--treatWarningsAsErrors`）で CI 実行
-  - GitHub Release のノートを CHANGELOG の該当セクションから生成
-    （自動生成の PR リストは末尾に付記）
-  - CHANGELOG に compare リンクを追加
-  - `.editorconfig` を追加
-  - リポジトリ設定で secret scanning / push protection を有効化
-
-- カバレッジ補完（例外パス・save 系の全経路）とカバレッジ閾値
-  （statements 94 / branches 90 / functions 100 / lines 98）を導入（#34）
-- publint / @arethetypeswrong/cli による ESM・CJS dual パッケージングの
-  機械検証を `pnpm check`（`check:package`）に追加（#34）
-- Playwright + 実 Chromium の E2E（`pnpm e2e`）を追加。examples を Vite で
-  ビルド・配信し、Lisp プログラムが描画したピクセル値を直接アサートする。
-  CI に専用ジョブを追加（#34）
-- @napi-rs/canvas による Node.js 統合テストを追加。実 Canvas 実装で
-  `(gsave-png path)` の PNG 出力・`gpixel` / `gset-pixel` の描画結果・
-  `gmeasure-text` を検証（モジュールが使えない環境では skip）（#34）
-- examples が素のブラウザで動かなかった問題を修正
-  （kei-lisp がモジュールスコープで import する node:module / node:vm /
-  node:v8 に対する Vite 用シムを examples に追加）（#34）
 
 ## [2.0.0] - 2026-07-04
 
