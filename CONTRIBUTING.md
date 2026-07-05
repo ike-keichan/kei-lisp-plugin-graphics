@@ -55,15 +55,18 @@ single classes; lowercase directories group multiple related classes.
 
 ## Scripts
 
-| Command           | Description                                |
-| ----------------- | ------------------------------------------ |
-| `pnpm build`      | Build for distribution (CJS + ESM + types) |
-| `pnpm test`       | Run the test suite                         |
-| `pnpm test:watch` | Run tests in watch mode                    |
-| `pnpm doc`        | Generate API documentation with TypeDoc    |
-| `pnpm typecheck`  | Type check (`tsc --noEmit`)                |
-| `pnpm check`      | Run all checks (format / lint / spell)     |
-| `pnpm fix`        | Auto-fix format and lint issues            |
+| Command              | Description                                 |
+| -------------------- | ------------------------------------------- |
+| `pnpm build`         | Build for distribution (CJS + ESM + types)  |
+| `pnpm test`          | Run the test suite                          |
+| `pnpm test:coverage` | Run the test suite with coverage thresholds |
+| `pnpm test:watch`    | Run tests in watch mode                     |
+| `pnpm e2e`           | Browser E2E (Playwright + real Chromium)    |
+| `pnpm screenshot`    | Regenerate docs/assets/basic-drawing.png    |
+| `pnpm doc`           | Generate API documentation with TypeDoc     |
+| `pnpm typecheck`     | Type check (`tsc --noEmit`)                 |
+| `pnpm check`         | Run all checks (format / lint / spell)      |
+| `pnpm fix`           | Auto-fix format and lint issues             |
 
 ## Coding conventions
 
@@ -96,41 +99,51 @@ Conventions:
 ## Branch strategy
 
 kei-lisp-plugin-graphics bundles several features into one minor (or major)
-release using **release-line branches** (`v1.0`, `v1.1`, ...), then merges
-them into `main` at release time. Patches go directly through `hotfix/*` PRs
-to `main`.
+release using **release-line branches** (`v2.0`, `v3.0`, ...), then
+merges them into `main` at release time. Patch releases go directly through
+`feature/*` PRs to `main`. Emergency fixes use `hotfix/*` PRs to `main`.
 
 ```
 feature/* ──┐
 feature/* ──┤── vX.Y (release line) ──→ main ──→ tag vX.Y.0 ──→ npm
 feature/* ──┘                          ↑
                                        │ (vX.Y is kept as a permanent snapshot)
-                                hotfix/* ──→ main (patches, direct)
+                    feature/* ──→ main (patch releases)
+                     hotfix/* ──→ main (emergency fixes)
 ```
 
 | Branch                | Purpose                                                                                                                               | Lifetime               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
 | `main`                | Latest released state. Always tag-ready                                                                                               | Permanent              |
 | `vX.Y` (release line) | Integrates multiple features for the next minor or major release. Retained after release as a snapshot of that minor's released state | Permanent (long-lived) |
-| `feature/*`           | A single logical change targeting the active `vX.Y`                                                                                   | Until merged           |
-| `hotfix/*`            | Patch or urgent fix targeting `main` directly. Used for both routine patch releases and emergency fixes                               | Until merged           |
+| `feature/*`           | A single logical change. Targets the active `vX.Y` for minor/major; targets `main` directly for patch releases                        | Until merged           |
+| `hotfix/*`            | Emergency fix targeting `main` directly                                                                                               | Until merged           |
+
+All major / minor lines (`v1.0`, `v1.1`, `v2.0`, `v3.0`, ...) are kept
+around as snapshots of their released state. There is no separate
+`vX` (bare-major) maintenance branch; the `vX.0` branch doubles as the
+v(X).0.x maintenance line. The `release.yml` workflow currently only
+fires on pushes to `main`, so backporting a patch to an older line
+requires either extending the workflow trigger or publishing manually.
 
 ### Branch creation responsibilities
 
-| Branch type           | Created by          | When                                                                        |
-| --------------------- | ------------------- | --------------------------------------------------------------------------- |
-| `vX.Y` (release line) | **Maintainer only** | When planning a minor or major release that bundles 2+ features             |
-| `hotfix/*`            | **Maintainer only** | When a patch (routine or urgent) needs to be cut against a released version |
-| `feature/*`           | Anyone              | Anytime, branching from the **active release line** (`vX.Y`)                |
+| Branch type           | Created by          | When                                                                                                   |
+| --------------------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `vX.Y` (release line) | **Maintainer only** | When planning a minor or major release that bundles 2+ features                                        |
+| `hotfix/*`            | **Maintainer only** | When an emergency fix needs to be released immediately                                                 |
+| `feature/*`           | Anyone              | Branching from the **active release line** (`vX.Y`) for minor/major, or from `main` for patch releases |
 
 If you are unsure which base branch to target, ask in the PR description
 or open a draft PR and the maintainer will guide you.
 
 ## Pull request guidelines
 
-1. **Branch from the active release line** (`vX.Y`) and use a
-   descriptive branch name (e.g. `feature/add-arc-spec`,
-   `fix/stroke-color-parse`).
+1. **Choose the right base branch** and use a descriptive branch name
+   (e.g. `feature/add-arc-spec`, `fix/stroke-color-parse`):
+   - Minor / major: branch from the **active release line** (`vX.Y`)
+   - Patch release: branch from **`main`**
+   - Emergency fix: use `hotfix/*` branched from **`main`**
 2. **Keep changes focused** — one logical change per PR.
 3. **Update tests** to cover new behavior or regressions.
 4. **Update documentation** (`README.md`, `CHANGELOG.md`, `docs/`) when
@@ -154,12 +167,22 @@ the workflow is a no-op, so it is safe to re-trigger.
 
 ### Maintainer steps
 
-1. On the release-line branch (`vX.Y`), update `CHANGELOG.md` — move pending
-   entries under a new `## [<new-version>] - <YYYY-MM-DD>` header.
+#### Minor / major release
+
+1. On the release-line branch (`vX.Y`), update `CHANGELOG.md` —
+   move pending entries under a new
+   `## [<new-version>] - <YYYY-MM-DD>` header.
 2. Bump `version` in `package.json` to match.
-3. Open a PR from the version branch to `main`, review, and merge.
+3. Open a PR from the release-line branch to `main`, review, and merge.
 4. The release workflow runs automatically on the resulting `main`
    push. No manual tagging required.
+
+#### Patch release
+
+1. Branch `feature/<description>` from `main`.
+2. Apply changes, update `CHANGELOG.md`, and bump `version` in `package.json`.
+3. Open a PR targeting `main`, review, and merge.
+4. The release workflow runs automatically.
 
 ### Required configuration
 

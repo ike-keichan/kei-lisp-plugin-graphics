@@ -37,8 +37,14 @@ To write and run kei-lisp yourself, use
 ## Installation
 
 ```sh
+# npm
+npm install kei-lisp-plugin-graphics kei-lisp
+
+# yarn
+yarn add kei-lisp-plugin-graphics kei-lisp
+
+# pnpm
 pnpm add kei-lisp-plugin-graphics kei-lisp
-# or: npm install kei-lisp-plugin-graphics kei-lisp
 ```
 
 `kei-lisp` is a **peer dependency**; install both into your project. Requires
@@ -112,6 +118,8 @@ for argument signatures and side effects.
 
 ## Reference
 
+In-depth documentation of each area:
+
 - [Example page](https://ike-keichan.github.io/kei-lisp-plugin-graphics/) — the examples rendered on GitHub Pages
 - [kei-lisp-web](https://ike-keichan.github.io/kei-lisp-web/) — interactive kei-lisp playground
 - [API docs (TypeDoc)](https://ike-keichan.github.io/kei-lisp-plugin-graphics/api/) — generated API documentation
@@ -131,13 +139,16 @@ pnpm install
 Requires [pnpm](https://pnpm.io/) and Node.js 24+
 (see [`.node-version`](./.node-version) for the exact version).
 
-| Command           | Description                                |
-| ----------------- | ------------------------------------------ |
-| `pnpm build`      | Build for distribution (CJS + ESM + types) |
-| `pnpm test`       | Run tests                                  |
-| `pnpm test:watch` | Run tests in watch mode                    |
-| `pnpm check`      | Run all checks (format, lint, spell, ...)  |
-| `pnpm fix`        | Auto-fix format and lint issues            |
+| Command              | Description                               |
+| -------------------- | ----------------------------------------- |
+| `pnpm build`         | Build for distribution                    |
+| `pnpm test`          | Run tests                                 |
+| `pnpm test:coverage` | Run tests with coverage thresholds        |
+| `pnpm test:watch`    | Run tests in watch mode                   |
+| `pnpm e2e`           | Browser E2E (Playwright + Chromium)       |
+| `pnpm screenshot`    | Regenerate the README screenshot          |
+| `pnpm check`         | Run all checks (format, lint, spell, ...) |
+| `pnpm fix`           | Auto-fix format and lint issues           |
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for the branch policy and PR flow.
 

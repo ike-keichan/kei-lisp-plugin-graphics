@@ -5,189 +5,250 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [3.0.1] - 2026-07-05
+
+### Changed
+
+- Aligned the CONTRIBUTING branch strategy with kei-lisp itself: routine
+  patch releases now go through `feature/*` PRs to `main`, and `hotfix/*`
+  is reserved for emergency fixes. The diagram, branch tables,
+  responsibility table, and PR template wording were updated to match (#39)
+- Rewrote the CHANGELOG in English to match kei-lisp's convention
+
+### Fixed
+
+- Corrected the README demo wording: the Pages example page only renders a
+  fixed sample program, so it is no longer described as something to "try";
+  readers who want to write Lisp interactively are pointed to kei-lisp-web
+- Split the Deploy Pages workflow into build / deploy jobs so a transient
+  Pages failure can be recovered with "Re-run failed jobs" (the single-job
+  layout re-uploaded the artifact on rerun and always failed on a name
+  conflict)
+
 ## [3.0.0] - 2026-07-04
 
 ### Added
 
-- Canvas 2D API のカバレッジを拡大し、30 個の `g…` 関数を追加（45 → 75 関数、#31）
-  - グラデーション: `glinear-gradient` / `gradial-gradient` / `gconic-gradient`
-  - 図形・パス: `gellipse` / `ground-rect` / `gclip` / `gis-point-in-path` / `gis-point-in-stroke`
-  - 線: `gline-dash` / `gline-dash-offset` / `gmiter-limit`
-  - 変形: `gtransform` / `gset-transform` / `greset-transform`
-  - 合成・画質: `gcomposite` / `gfilter` / `gimage-smoothing`
-  - テキスト: `gmeasure-text` / `gletter-spacing` / `gword-spacing` / `gfont-kerning` /
-    `gfont-stretch` / `gfont-variant` / `gtext-rendering`
-  - ピクセル・その他: `gpixel` / `gset-pixel` / `gclear-rect` / `greset` / `gwidth` / `gheight`
-- `gfill-text` / `gstroke-text` に第4引数 `maxWidth` を追加（#31）
-- 値を返す関数（`gwidth` / `gheight` / `gmeasure-text` / `gpixel` /
-  `gis-point-in-path` / `gis-point-in-stroke`）の戻り値規約を docs に明文化（#31）
-- `gtext-baseline` / `gtext-direction` を正式名として追加（#32）
-- `GraphicsPlugin.functionNames()` — 登録済み Lisp 関数名の一覧を返す static メソッドを追加（#32）
-
-- `docs/non-goals.md` — 意図的に対応しない事項（プラグイン層の性能最適化・
-  ImageData 一括転送・DOM 結合 API・非同期描画・mutation testing・
-  ドキュメント多言語化・プロダクションサポート）とその理由を明文化（#37）
-
-- README に描画例のスクリーンショット（`pnpm screenshot` で再生成可能）と
-  サポート環境マトリクス（ブラウザ / OffscreenCanvas / Node.js）を追加（#36）
-- GitHub Pages へライブデモ（examples）と TypeDoc を自動デプロイする
-  ワークフローを追加し、README からリンク（#36）
-- docs/graphics.md に使用例（グラデーション・変形・値を返す関数・保存）を追加（#36）
-- CI・リポジトリ運用を強化（#35）
-  - CodeQL（code scanning）ワークフローを追加
-  - actionlint によるワークフロー自体の検証ジョブを追加
-  - knip による未使用 export / 未使用依存の検出（`check:knip`）を追加
-  - TypeDoc を警告ゼロ強制（`--treatWarningsAsErrors`）で CI 実行
-  - GitHub Release のノートを CHANGELOG の該当セクションから生成
-    （自動生成の PR リストは末尾に付記）
-  - CHANGELOG に compare リンクを追加
-  - `.editorconfig` を追加
-  - リポジトリ設定で secret scanning / push protection を有効化
-
-- カバレッジ補完（例外パス・save 系の全経路）とカバレッジ閾値
-  （statements 94 / branches 90 / functions 100 / lines 98）を導入（#34）
-- publint / @arethetypeswrong/cli による ESM・CJS dual パッケージングの
-  機械検証を `pnpm check`（`check:package`）に追加（#34）
-- Playwright + 実 Chromium の E2E（`pnpm e2e`）を追加。examples を Vite で
-  ビルド・配信し、Lisp プログラムが描画したピクセル値を直接アサートする。
-  CI に専用ジョブを追加（#34）
-- @napi-rs/canvas による Node.js 統合テストを追加。実 Canvas 実装で
-  `(gsave-png path)` の PNG 出力・`gpixel` / `gset-pixel` の描画結果・
-  `gmeasure-text` を検証（モジュールが使えない環境では skip）（#34）
-- examples が素のブラウザで動かなかった問題を修正
-  （kei-lisp がモジュールスコープで import する node:module / node:vm /
-  node:v8 に対する Vite 用シムを examples に追加）（#34）
+- Expanded Canvas 2D API coverage with 30 new `g…` functions
+  (45 → 75 functions, #31)
+  - Gradients: `glinear-gradient` / `gradial-gradient` / `gconic-gradient`
+  - Shapes / paths: `gellipse` / `ground-rect` / `gclip` /
+    `gis-point-in-path` / `gis-point-in-stroke`
+  - Lines: `gline-dash` / `gline-dash-offset` / `gmiter-limit`
+  - Transforms: `gtransform` / `gset-transform` / `greset-transform`
+  - Compositing / quality: `gcomposite` / `gfilter` / `gimage-smoothing`
+  - Text: `gmeasure-text` / `gletter-spacing` / `gword-spacing` /
+    `gfont-kerning` / `gfont-stretch` / `gfont-variant` / `gtext-rendering`
+  - Pixels and misc: `gpixel` / `gset-pixel` / `gclear-rect` / `greset` /
+    `gwidth` / `gheight`
+- `gfill-text` / `gstroke-text` accept an optional fourth `maxWidth`
+  argument (#31)
+- Documented the return-value convention for the value-returning functions
+  (`gwidth` / `gheight` / `gmeasure-text` / `gpixel` / `gis-point-in-path` /
+  `gis-point-in-stroke`) (#31)
+- Added `gtext-baseline` / `gtext-direction` as the primary names (#32)
+- Added `GraphicsPlugin.functionNames()` — a static method returning the
+  list of registered Lisp function names (#32)
+- `docs/non-goals.md` — documented what the project deliberately does not
+  do (plugin-layer performance work, bulk ImageData transfer, DOM-coupled
+  canvas APIs, async drawing semantics, mutation testing, multi-language
+  docs, production support) and why (#37)
+- Added a README screenshot of the example canvas (regenerated with
+  `pnpm screenshot`) and an environment support matrix
+  (browser / OffscreenCanvas / Node.js) (#36)
+- Added a workflow that deploys the examples and TypeDoc to GitHub Pages,
+  linked from the README (#36)
+- Added usage examples (gradients, transforms, value-returning functions,
+  saving) to docs/graphics.md (#36)
+- Raised CI and repository operations to OSS standards (#35)
+  - Added a CodeQL (code scanning) workflow
+  - Added an actionlint job that lints the workflows themselves
+  - Added unused-code / unused-dependency detection with knip
+    (`check:knip`)
+  - Run TypeDoc with `--treatWarningsAsErrors` in CI
+  - Generate GitHub Release notes from the matching CHANGELOG section
+    (the auto-generated PR list is appended)
+  - Added compare links to the CHANGELOG
+  - Added an `.editorconfig`
+  - Enabled secret scanning / push protection in the repository settings
+- Filled the remaining coverage gaps (every exception path and all save
+  paths) and enforced coverage thresholds
+  (statements 94 / branches 90 / functions 100 / lines 98) (#34)
+- Added machine verification of the dual ESM / CJS packaging with publint
+  and @arethetypeswrong/cli via `pnpm check` (`check:package`) (#34)
+- Added a real-Chromium E2E (`pnpm e2e`): builds and serves the examples
+  with Vite and asserts the pixels the Lisp program painted, with a
+  dedicated CI job (#34)
+- Added a Node.js integration test using @napi-rs/canvas that verifies
+  `(gsave-png path)` PNG output, `gpixel` / `gset-pixel` round-trips, and
+  `gmeasure-text` against a real canvas implementation (skipped where the
+  module is unavailable) (#34)
+- Fixed the examples not working in a plain browser by adding Vite shims
+  for the node:module / node:vm / node:v8 imports that kei-lisp pulls in
+  at module scope (#34)
 
 ### Deprecated
 
-- `gtext-line` / `gtext-dire` — `gtext-baseline` / `gtext-direction` の
-  deprecated エイリアスに変更（動作は継続。将来のメジャーで削除予定、#32）
+- `gtext-line` / `gtext-dire` — now deprecated aliases of `gtext-baseline`
+  / `gtext-direction` (they keep working; removal is planned for a future
+  major release, #32)
 
 ### Changed
 
-- **Breaking:** `gpattern` の第2引数を数値フラグから Canvas API と同じ文字列
-  （`"repeat"` / `"repeat-x"` / `"repeat-y"` / `"no-repeat"`）に変更。
-  ドキュメントは以前から文字列と記載しており、実装を追従（#32）
-- **Breaking (TypeScript API):** ディスパッチテーブルを非公開化
-  （public static だった `buildInFunctions`（typo・mutable）と `setup` /
-  `selectProcedure` / `buildInFunction` を削除し、`apply` 内部に統合。
-  一覧が必要な場合は新設の `functionNames()` を使用）（#32）
-- 列挙文字列を受け取る全関数（`gline-cap` / `gline-join` / `gtext-align` /
+- **Breaking:** `gpattern`'s second argument changed from a numeric flag to
+  the same strings as the Canvas API (`"repeat"` / `"repeat-x"` /
+  `"repeat-y"` / `"no-repeat"`). The documentation already described it as
+  a string; the implementation now follows (#32)
+- **Breaking (TypeScript API):** the dispatch table is now private — the
+  public static `buildInFunctions` (a typo'd, mutable Map) and `setup` /
+  `selectProcedure` / `buildInFunction` were removed and folded into
+  `apply`. Use the new `functionNames()` when a list is needed (#32)
+- Every enum-string setter (`gline-cap` / `gline-join` / `gtext-align` /
   `gtext-baseline` / `gtext-direction` / `gcomposite` / `gfont-*` /
-  `gtext-rendering` / `gpattern` の repetition）で許容値リストによる検証を導入。
-  不正値は期待値を示す診断メッセージ + `nil` を返す（#32）
-- `GraphicsPlugin` の無意味な `extends Object` を削除（#32）
+  `gtext-rendering` / `gpattern`'s repetition) now validates its argument
+  against the Canvas API's allowed values; invalid values return `nil`
+  with a diagnostic listing the expected values (#32)
+- Removed the meaningless `extends Object` from `GraphicsPlugin` (#32)
 
 ### Fixed
 
-- `gpattern`: `createPattern()` が null を返した場合に型キャストで握りつぶしていた
-  レガシーバグを修正し、診断メッセージを出力するように変更（#33）
-- `#print` が `process.stderr` の無い素のブラウザで例外になっていたのを、
-  `console.error` へのフォールバックで解消。shim なしでも動作する（#33）
-- `gimage` / `gpattern` にロード済み画像のキャッシュを導入。同一 `src` の
-  2回目以降の描画は同期実行され、描画順が保たれる。ロード失敗時は診断を出力（#33）
-- `gclear` に任意色の指定を追加（引数なしは従来どおり白）。また実行後に
-  `fillStyle` を黒へ強制リセットしていたのをやめ、直前の値を復元するように変更（#33）
-- `gsleep` が busy-wait でスレッドをブロックする旨を docs に明記（#33）
+- `gpattern`: fixed a legacy bug where a null `createPattern()` result was
+  cast away; a diagnostic is printed instead (#33)
+- `#print` no longer throws in a plain browser without `process.stderr`;
+  it falls back to `console.error`, so the plugin works without a host
+  shim (#33)
+- `gimage` / `gpattern` now cache loaded images per plugin instance:
+  repeat draws of the same `src` run synchronously and keep the drawing
+  order, and a load failure prints a diagnostic (#33)
+- `gclear` accepts an optional color (no arguments still paints white) and
+  restores the previous `fillStyle` instead of resetting it to black (#33)
+- Documented that `gsleep` busy-waits and blocks the thread (#33)
 
 ## [2.0.0] - 2026-07-04
 
 ### Added
 
-- DX・コミュニティ整備（#20）
-  - `SECURITY.md` — GitHub の private vulnerability reporting を窓口とする
-    脆弱性報告ポリシーを追加
-  - `CODE_OF_CONDUCT.md` — Contributor Covenant v2.1 ベースの行動規範を追加
-  - `.github/ISSUE_TEMPLATE/` — バグ報告・機能要望・質問の issue form と
-    `config.yml`（blank issue 無効化・セキュリティ報告への誘導）を追加
-  - `examples/` — ブラウザ（Vite）で動かす基本描画サンプル
-    （矩形・円・三角形・テキスト・変形・`gsave-png` ダウンロード）を追加。
-    kei-lisp と同様に `tsconfig.json` / ESLint / cspell / Prettier の
-    チェック対象に含めた
-- README に、本プロジェクトがおもちゃ（hobby）プロジェクトであり
-  プロダクション用途は非推奨である旨の注意書きを追加
-- README / CONTRIBUTING に、個人プロジェクトのため issue での報告は歓迎するが
-  外部からの pull request は原則受け付けない旨を明記
-- `@vitest/coverage-v8` によるテストカバレッジ計測を導入（#19）
-  - `pnpm test:coverage` スクリプトと `vitest.config.js` の coverage 設定を追加
-  - CI の tests ジョブをカバレッジ計測付き（`pnpm test:coverage`）に変更
-- エラーパスのテストを追加（#19）。全 `g…` 関数について、canvas がクローズ状態のとき・
-  引数の型が不一致のとき・引数の個数が不一致のときに `nil` を返すことを検証
-- CJS ビルド（`dist/index.cjs`）を `require()` で読み込めることを確認する
-  スモークテストを追加（#19）
+- DX and community-health files (#20)
+  - `SECURITY.md` — a vulnerability reporting policy using GitHub's
+    private vulnerability reporting as the contact channel
+  - `CODE_OF_CONDUCT.md` — a code of conduct based on Contributor
+    Covenant v2.1
+  - `.github/ISSUE_TEMPLATE/` — issue forms for bug reports, feature
+    requests, and questions, plus `config.yml` (blank issues disabled,
+    security reports routed to private reporting)
+  - `examples/` — a basic browser drawing sample run with Vite
+    (rectangles, circle, triangle, text, transforms, `gsave-png`
+    download), included in the `tsconfig.json` / ESLint / cspell /
+    Prettier check targets like kei-lisp
+- Added a README notice that this is a toy / hobby project and production
+  use is not recommended
+- Stated in README / CONTRIBUTING that issue reports are welcome but
+  external pull requests are generally not accepted, as this is a
+  personal project
+- Introduced test coverage measurement with `@vitest/coverage-v8` (#19)
+  - Added a `pnpm test:coverage` script and coverage settings in
+    `vitest.config.js`
+  - The CI tests job now runs with coverage (`pnpm test:coverage`)
+- Added error-path tests (#19): every `g…` function is verified to return
+  `nil` when the canvas is closed, when an argument has the wrong type,
+  and when the argument count is wrong
+- Added a smoke test that `require()`s the CJS build (`dist/index.cjs`)
+  (#19)
 
 ### Changed
 
-- **Breaking:** `gline-cap` / `gline-join` が数値フラグ（0 / 正 / 負）ではなく
-  Canvas API と同じ文字列（`"butt"` / `"round"` / `"square"`、
-  `"miter"` / `"round"` / `"bevel"`）を受け取るように変更（#18）
-- **Breaking:** `gtext-dire` が数値フラグではなく `ctx.direction` と同じ文字列
-  （`"ltr"` / `"rtl"` / `"inherit"`）を受け取るように変更（#18）
-- `gsave-jpeg` / `gsave-png` に Node.js 向けのオーバーロード `path: string` を追加。
-  引数なしは従来どおりブラウザダウンロード（`toDataURL` + `<a download>`）で、
-  DOM や `toDataURL` が無い環境（Node.js / `OffscreenCanvas`）で引数なしで呼ぶと
-  例外に頼らず明示的なエラーメッセージを出力するように変更（#18）
+- **Breaking:** `gline-cap` / `gline-join` now take the same strings as
+  the Canvas API (`"butt"` / `"round"` / `"square"`,
+  `"miter"` / `"round"` / `"bevel"`) instead of numeric flags
+  (0 / positive / negative) (#18)
+- **Breaking:** `gtext-dire` now takes the same strings as
+  `ctx.direction` (`"ltr"` / `"rtl"` / `"inherit"`) instead of a numeric
+  flag (#18)
+- `gsave-jpeg` / `gsave-png` gained a Node.js overload taking
+  `path: string`. The no-argument form still triggers a browser download
+  (`toDataURL` + `<a download>`), and environments without a DOM or
+  `toDataURL` (Node.js / `OffscreenCanvas`) now get an explicit
+  diagnostic instead of an exception (#18)
 
 ### Security
 
-- 推移的依存（vitest 経由）の `vite` を 8.0.16 以上に更新し、
-  Dependabot が報告していた 2 件の脆弱性
-  （`server.fs.deny` バイパス / launch-editor 経由の NTLMv2 ハッシュ漏洩、
-  いずれも Windows のみ・開発時のみ）を解消
+- Refreshed the transitive `vite` dependency (via vitest) to 8.0.16 or
+  later, resolving the two vulnerabilities reported by Dependabot
+  (`server.fs.deny` bypass / NTLMv2 hash disclosure via launch-editor;
+  both Windows-only and dev-time-only)
 
 ## [1.1.0] - 2026-07-02
 
 ### Added
 
-- `gsave` / `grestore` — Canvas の状態スタックを明示的に操作する Lisp 関数を追加
+- `gsave` / `grestore` — Lisp functions for explicitly managing the
+  canvas state stack
 
 ### Changed
 
-- ほぼ全ての描画メソッドが対応する `restore()` なしに呼んでいた `ctx.save()` を削除。
-  呼び出しのたびに状態スタックが際限なく積み上がるリークを解消し、状態管理は新設の
-  `gsave` / `grestore` に一本化
+- Removed the `ctx.save()` calls that almost every drawing method made
+  without a matching `restore()`, fixing the unbounded state-stack growth;
+  state management is unified under the new `gsave` / `grestore`
 
 ### Fixed
 
-- `gshadow-blur` が `ctx.shadowBlur` ではなく存在しない `ctx.Blur` に書き込んでおり、
-  シャドウブラーが効かなかったバグを修正（レガシー Graphist.js からの引き継ぎ）
-- `gopen` が実際のキャンバスサイズと無関係な固定文字列
-  `'canvas size, width : 600 height : 300'` を出力していたのを、
-  `canvas.width` / `canvas.height` を用いた実サイズ表示に修正
-- `gstroke-text` の失敗時メッセージが `'Can not draw fill text.'`（`gfill-text` からの
-  コピペミス）だったのを `'Can not draw stroke text.'` に修正
-- `docs/graphics.md` の関数リファレンスの誤り・未記載項目を修正
-  - `garc` に未記載だった第 6 引数（反時計回りフラグ）を追記し、角度が度数指定である旨を明記
-  - `gimage` の 5 引数形式（描画サイズ指定 `w` × `h`）を追記
-  - `gtext-line` の説明を修正（`ctx.textBaseline` を文字列で設定する。誤って「line height / `number`」と記載していた）
-  - `gsave-jpeg` / `gsave-png` の引数仕様を修正（`path` は取らず、ブラウザ専用のダウンロード動作である旨を明記）
-  - `grotate` の角度単位を修正（実装は度数指定だが「radians」と記載していた）
-- `typedoc.json` の `intentionallyNotExported` から、このパッケージに存在しない
-  kei-lisp 内部型（`Table` / `StreamManager` / `Loop`）のコピー残りを削除
-- `.github/PULL_REQUEST_TEMPLATE.md` のベースブランチ説明を `CONTRIBUTING.md` に合わせて更新
-  （`feature/*` は `vX.Y`、`hotfix/*` は `main` を対象とする旨に修正）
-- `GraphicsPlugin` の JSDoc `@param` の不整合を修正し、`pnpm doc` を警告ゼロに
-  - `apply` / `selectProcedure` / `buildInFunction` の `@param` 名を実引数名へ
-    （`args` → `arguments_`、`_ctx` → `_context`）
-  - 引数を取らない `gsave` / `grestore` に付いていた不要な `@param arguments_` を削除
-- 設定ファイルに残っていた、このパッケージに存在しない `examples/` への参照を削除
-  （`tsconfig.json` の `include`、`configs/eslint/const/index.mjs` の `FILES.SRC`）
-- どのツールも出力しない `out/` を無視する設定を、実際の生成物ディレクトリ
-  `docs/typedoc/` に修正（`eslint.config.mjs` の `ignores`、`cspell.json` の `ignorePaths`）
+- `gshadow-blur` wrote to the nonexistent `ctx.Blur` instead of
+  `ctx.shadowBlur`, so shadow blur never took effect (inherited from the
+  legacy Graphist.js)
+- `gopen` printed the fixed string
+  `'canvas size, width : 600 height : 300'` regardless of the actual
+  canvas size; it now reports `canvas.width` / `canvas.height`
+- `gstroke-text`'s failure message was `'Can not draw fill text.'`
+  (copy-pasted from `gfill-text`); corrected to
+  `'Can not draw stroke text.'`
+- Corrected errors and missing entries in the `docs/graphics.md`
+  function reference
+  - Documented `garc`'s previously missing sixth argument
+    (counter-clockwise flag) and that angles are in degrees
+  - Documented `gimage`'s 5-argument form (drawing size `w` × `h`)
+  - Fixed `gtext-line`'s description (it sets `ctx.textBaseline` from a
+    string; it was wrongly described as "line height / `number`")
+  - Fixed the `gsave-jpeg` / `gsave-png` signatures (no `path` argument;
+    browser-only download behavior)
+  - Fixed `grotate`'s angle unit (the implementation uses degrees but the
+    doc said "radians")
+- Removed leftover kei-lisp internal types (`Table` / `StreamManager` /
+  `Loop`) from `typedoc.json`'s `intentionallyNotExported`
+- Updated the base-branch description in
+  `.github/PULL_REQUEST_TEMPLATE.md` to match `CONTRIBUTING.md`
+  (`feature/*` targets `vX.Y`; `hotfix/*` patches target `main`)
+- Fixed JSDoc `@param` inconsistencies in `GraphicsPlugin` so `pnpm doc`
+  runs with zero warnings
+  - Renamed the `@param`s of `apply` / `selectProcedure` /
+    `buildInFunction` to the actual argument names
+    (`args` → `arguments_`, `_ctx` → `_context`)
+  - Removed the stray `@param arguments_` from the argument-less
+    `gsave` / `grestore`
+- Removed references to the nonexistent `examples/` directory from the
+  configs (`tsconfig.json` `include`,
+  `configs/eslint/const/index.mjs` `FILES.SRC`)
+- Replaced the ignore settings for `out/`, which no tool writes to, with
+  the actual output directory `docs/typedoc/`
+  (`eslint.config.mjs` `ignores`, `cspell.json` `ignorePaths`)
 
 ## [1.0.1] - 2026-07-01
 
 ### Added
 
-- `docs/api.md` — TypeScript / JavaScript API リファレンスを追加
-- `docs/graphics.md` — 43 個の `g…` Lisp 関数のリファレンスを追加
-- CI ワークフローに Node.js 26 のマトリクスを追加
-- Dependabot の `groups` 設定を追加（npm dev/prod 分離・github-actions グループ化）
+- `docs/api.md` — TypeScript / JavaScript API reference
+- `docs/graphics.md` — reference for the 43 `g…` Lisp functions
+- Added Node.js 26 to the CI workflow matrix
+- Added Dependabot `groups` settings (npm dev/prod separation,
+  github-actions grouping)
 
 ### Changed
 
-- README に CI バッジと `## Features` セクションを追加、`## Documentation` を `## Reference` に統一
-- CONTRIBUTING のブランチ戦略を kei-lisp に合わせて更新（release-line branch・永続保持）
+- Added a CI badge and a `## Features` section to the README, and renamed
+  `## Documentation` to `## Reference`
+- Updated the CONTRIBUTING branch strategy to match kei-lisp
+  (release-line branches, kept permanently)
 
 ## [1.0.0] - 2026-06-28
 
@@ -208,7 +269,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`'The canvas has already been opened.'`) due to a copy-paste from
   `gOpen`'s double-open guard.
 
-[unreleased]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.0...HEAD
+[unreleased]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.0.1...v1.1.0

@@ -85,8 +85,8 @@ const COMPOSITE_OPERATIONS = new Set<string>([
  * @class
  * @classdesc Canvas2D drawing plugin for the kei-lisp interpreter. Implements
  *            the `KeiLispPlugin` contract (`name` / `has` / `apply`) and
- *            exposes 75 `g…` Lisp functions that proxy to a 2D rendering
- *            context.
+ *            exposes 75 `g…` Lisp functions (plus two deprecated aliases)
+ *            that proxy to a 2D rendering context.
  * @author Keisuke Ikeda
  */
 export class GraphicsPlugin implements KeiLispPlugin {
