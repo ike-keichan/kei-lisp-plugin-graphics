@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LispValue, PluginContext } from 'kei-lisp';
 import { Cons, InterpretedSymbol, LispInterpreter, StreamManager } from 'kei-lisp';
@@ -48,6 +48,35 @@ type FakeContext = {
   rotate: ReturnType<typeof vi.fn>;
   createPattern: ReturnType<typeof vi.fn>;
   drawImage: ReturnType<typeof vi.fn>;
+  lineDashOffset: number;
+  miterLimit: number;
+  globalCompositeOperation: string;
+  filter: string;
+  imageSmoothingEnabled: boolean;
+  imageSmoothingQuality: string;
+  letterSpacing: string;
+  wordSpacing: string;
+  fontKerning: string;
+  fontStretch: string;
+  fontVariantCaps: string;
+  textRendering: string;
+  ellipse: ReturnType<typeof vi.fn>;
+  roundRect: ReturnType<typeof vi.fn>;
+  setLineDash: ReturnType<typeof vi.fn>;
+  clip: ReturnType<typeof vi.fn>;
+  isPointInPath: ReturnType<typeof vi.fn>;
+  isPointInStroke: ReturnType<typeof vi.fn>;
+  transform: ReturnType<typeof vi.fn>;
+  setTransform: ReturnType<typeof vi.fn>;
+  resetTransform: ReturnType<typeof vi.fn>;
+  measureText: ReturnType<typeof vi.fn>;
+  reset: ReturnType<typeof vi.fn>;
+  getImageData: ReturnType<typeof vi.fn>;
+  putImageData: ReturnType<typeof vi.fn>;
+  createImageData: ReturnType<typeof vi.fn>;
+  createLinearGradient: ReturnType<typeof vi.fn>;
+  createRadialGradient: ReturnType<typeof vi.fn>;
+  createConicGradient: ReturnType<typeof vi.fn>;
 };
 
 /**
@@ -94,6 +123,35 @@ function makeFakeContext(): FakeContext {
     rotate: vi.fn(),
     createPattern: vi.fn().mockReturnValue(null),
     drawImage: vi.fn(),
+    lineDashOffset: 0,
+    miterLimit: 10,
+    globalCompositeOperation: 'source-over',
+    filter: 'none',
+    imageSmoothingEnabled: true,
+    imageSmoothingQuality: 'low',
+    letterSpacing: '0px',
+    wordSpacing: '0px',
+    fontKerning: 'auto',
+    fontStretch: 'normal',
+    fontVariantCaps: 'normal',
+    textRendering: 'auto',
+    ellipse: vi.fn(),
+    roundRect: vi.fn(),
+    setLineDash: vi.fn(),
+    clip: vi.fn(),
+    isPointInPath: vi.fn().mockReturnValue(true),
+    isPointInStroke: vi.fn().mockReturnValue(false),
+    transform: vi.fn(),
+    setTransform: vi.fn(),
+    resetTransform: vi.fn(),
+    measureText: vi.fn().mockReturnValue({ width: 42 }),
+    reset: vi.fn(),
+    getImageData: vi.fn().mockReturnValue({ data: [10, 20, 30, 255] }),
+    putImageData: vi.fn(),
+    createImageData: vi.fn().mockReturnValue({ data: new Uint8ClampedArray(4) }),
+    createLinearGradient: vi.fn().mockReturnValue({ addColorStop: vi.fn() }),
+    createRadialGradient: vi.fn().mockReturnValue({ addColorStop: vi.fn() }),
+    createConicGradient: vi.fn().mockReturnValue({ addColorStop: vi.fn() }),
   };
 }
 
@@ -144,6 +202,22 @@ function makeContext(): PluginContext {
   };
 }
 
+/**
+ * Creates an already-opened plugin and exposes the fake context for asserts.
+ */
+function openPlugin(): { plugin: GraphicsPlugin; ctx: FakeContext } {
+  const { plugin } = makePlugin();
+  plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+  return { plugin, ctx: plugin.ctx as unknown as FakeContext };
+}
+
+/**
+ * Applies the named Lisp function with the given arguments.
+ */
+function call(plugin: GraphicsPlugin, name: string, ...values: LispValue[]): LispValue {
+  return plugin.apply(InterpretedSymbol.of(name), arguments_(...values), makeContext());
+}
+
 describe('GraphicsPlugin', () => {
   describe('constructor', () => {
     it('binds the given canvas', () => {
@@ -188,17 +262,20 @@ describe('GraphicsPlugin', () => {
     });
   });
 
-  describe('buildInFunction', () => {
-    it('throws TypeError when the dispatch table points to a missing method', () => {
-      const { plugin } = makePlugin();
-      // Temporarily inject a symbol that maps to a non-existent method name.
-      const orphan = InterpretedSymbol.of('test-orphan');
-      GraphicsPlugin.buildInFunctions.set(orphan, 'methodDoesNotExist');
-      try {
-        expect(() => plugin.buildInFunction(orphan, Cons.nil)).toThrow(TypeError);
-      } finally {
-        GraphicsPlugin.buildInFunctions.delete(orphan);
-      }
+  describe('functionNames', () => {
+    it('lists every registered Lisp function, sorted', () => {
+      const names = GraphicsPlugin.functionNames();
+      expect(names).toContain('gopen');
+      expect(names).toContain('glinear-gradient');
+      // eslint-disable-next-line unicorn/no-array-sort -- toSorted is untyped under lib ES2022
+      expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    });
+
+    it('includes the deprecated aliases alongside the new names', () => {
+      const names = GraphicsPlugin.functionNames();
+      expect(names).toEqual(
+        expect.arrayContaining(['gtext-dire', 'gtext-direction', 'gtext-line', 'gtext-baseline']),
+      );
     });
   });
 
@@ -736,14 +813,367 @@ describe('GraphicsPlugin', () => {
     });
   });
 
+  describe('Canvas API coverage additions (#31)', () => {
+    it('gellipse converts angles from degrees and maps the ccw flag', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gellipse', 50, 60, 40, 20, 90, 0, 180, 1)).toBe(
+        InterpretedSymbol.of('t'),
+      );
+      expect(ctx.ellipse).toHaveBeenCalledWith(50, 60, 40, 20, Math.PI / 2, 0, Math.PI, true);
+    });
+
+    it('ground-rect forwards x, y, w, h, r to ctx.roundRect', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'ground-rect', 10, 20, 100, 50, 8);
+      expect(ctx.roundRect).toHaveBeenCalledWith(10, 20, 100, 50, 8);
+    });
+
+    it('gline-dash forwards segments to ctx.setLineDash', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gline-dash', 5, 3);
+      expect(ctx.setLineDash).toHaveBeenCalledWith([5, 3]);
+    });
+
+    it('gline-dash with no arguments clears the dash pattern', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gline-dash');
+      expect(ctx.setLineDash).toHaveBeenCalledWith([]);
+    });
+
+    it('gline-dash-offset and gmiter-limit write their properties', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gline-dash-offset', 4);
+      call(plugin, 'gmiter-limit', 3);
+      expect(ctx.lineDashOffset).toBe(4);
+      expect(ctx.miterLimit).toBe(3);
+    });
+
+    it('gclip forwards to ctx.clip', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gclip')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.clip).toHaveBeenCalledTimes(1);
+    });
+
+    it('gis-point-in-path returns t when the context reports a hit', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gis-point-in-path', 5, 5)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.isPointInPath).toHaveBeenCalledWith(5, 5);
+    });
+
+    it('gis-point-in-stroke returns nil when the context reports a miss', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gis-point-in-stroke', 5, 5)).toBe(Cons.nil);
+    });
+
+    it('gtransform / gset-transform / greset-transform forward matrices', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gtransform', 1, 0, 0, 1, 10, 20);
+      call(plugin, 'gset-transform', 2, 0, 0, 2, 0, 0);
+      call(plugin, 'greset-transform');
+      expect(ctx.transform).toHaveBeenCalledWith(1, 0, 0, 1, 10, 20);
+      expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
+      expect(ctx.resetTransform).toHaveBeenCalledTimes(1);
+    });
+
+    it('gcomposite and gfilter write their properties', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gcomposite', 'multiply');
+      call(plugin, 'gfilter', 'blur(2px)');
+      expect(ctx.globalCompositeOperation).toBe('multiply');
+      expect(ctx.filter).toBe('blur(2px)');
+    });
+
+    it('gimage-smoothing "off" disables smoothing', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gimage-smoothing', 'off');
+      expect(ctx.imageSmoothingEnabled).toBe(false);
+    });
+
+    it('gimage-smoothing "high" enables smoothing and sets quality', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gimage-smoothing', 'high');
+      expect(ctx.imageSmoothingEnabled).toBe(true);
+      expect(ctx.imageSmoothingQuality).toBe('high');
+    });
+
+    it('gimage-smoothing rejects an unknown keyword', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gimage-smoothing', 'bogus')).toBe(Cons.nil);
+    });
+
+    it('gmeasure-text returns the measured width as a number', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gmeasure-text', 'hello')).toBe(42);
+      expect(ctx.measureText).toHaveBeenCalledWith('hello');
+    });
+
+    it('text style setters write their properties', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gletter-spacing', '2px');
+      call(plugin, 'gword-spacing', '4px');
+      call(plugin, 'gfont-kerning', 'none');
+      call(plugin, 'gfont-stretch', 'condensed');
+      call(plugin, 'gfont-variant', 'small-caps');
+      call(plugin, 'gtext-rendering', 'geometricPrecision');
+      expect(ctx.letterSpacing).toBe('2px');
+      expect(ctx.wordSpacing).toBe('4px');
+      expect(ctx.fontKerning).toBe('none');
+      expect(ctx.fontStretch).toBe('condensed');
+      expect(ctx.fontVariantCaps).toBe('small-caps');
+      expect(ctx.textRendering).toBe('geometricPrecision');
+    });
+
+    it('gclear-rect forwards to ctx.clearRect', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gclear-rect', 1, 2, 3, 4);
+      expect(ctx.clearRect).toHaveBeenCalledWith(1, 2, 3, 4);
+    });
+
+    it('greset forwards to ctx.reset', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'greset');
+      expect(ctx.reset).toHaveBeenCalledTimes(1);
+    });
+
+    it('gwidth and gheight return the canvas dimensions', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gwidth')).toBe(800);
+      expect(call(plugin, 'gheight')).toBe(600);
+    });
+
+    it('gpixel returns an (r g b a) list', () => {
+      const { plugin, ctx } = openPlugin();
+      const result = call(plugin, 'gpixel', 3, 4);
+      expect(ctx.getImageData).toHaveBeenCalledWith(3, 4, 1, 1);
+      expect(Cons.toString(result as Cons)).toBe('(10 20 30 255)');
+    });
+
+    it('gset-pixel writes a 1x1 ImageData at the given position', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gset-pixel', 3, 4, 255, 0, 0, 255)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.putImageData).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.any(Uint8ClampedArray) as Uint8ClampedArray }),
+        3,
+        4,
+      );
+    });
+
+    it('glinear-gradient adds all stops and sets both styles', () => {
+      const { plugin, ctx } = openPlugin();
+      const gradient = { addColorStop: vi.fn() };
+      ctx.createLinearGradient.mockReturnValue(gradient);
+      expect(call(plugin, 'glinear-gradient', 0, 0, 100, 0, 0, 'red', 1, 'blue')).toBe(
+        InterpretedSymbol.of('t'),
+      );
+      expect(ctx.createLinearGradient).toHaveBeenCalledWith(0, 0, 100, 0);
+      expect(gradient.addColorStop.mock.calls).toEqual([
+        [0, 'red'],
+        [1, 'blue'],
+      ]);
+      expect(ctx.fillStyle).toBe(gradient);
+      expect(ctx.strokeStyle).toBe(gradient);
+    });
+
+    it('glinear-gradient rejects an odd number of stop values', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'glinear-gradient', 0, 0, 100, 0, 0, 'red', 1)).toBe(Cons.nil);
+    });
+
+    it('gradial-gradient forwards both circles', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gradial-gradient', 50, 50, 0, 50, 50, 40, 0, 'red', 1, 'blue');
+      expect(ctx.createRadialGradient).toHaveBeenCalledWith(50, 50, 0, 50, 50, 40);
+    });
+
+    it('gconic-gradient converts the start angle from degrees', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gconic-gradient', 90, 50, 50, 0, 'red', 1, 'blue');
+      expect(ctx.createConicGradient).toHaveBeenCalledWith(Math.PI / 2, 50, 50);
+    });
+
+    it('gfill-text accepts an optional maxWidth fourth argument', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gfill-text', 'hi', 5, 15, 100);
+      expect(ctx.fillText).toHaveBeenCalledWith('hi', 5, 15, 100);
+    });
+
+    it('gstroke-text accepts an optional maxWidth fourth argument', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gstroke-text', 'hi', 5, 15, 100);
+      expect(ctx.strokeText).toHaveBeenCalledWith('hi', 5, 15, 100);
+    });
+  });
+
+  describe('robustness fixes (#33)', () => {
+    /** Instances created through the stubbed global Image, in order. */
+    let createdImages: Array<EventTarget & { src: string; complete: boolean }>;
+
+    beforeEach(() => {
+      createdImages = [];
+      const captured = createdImages;
+      vi.stubGlobal(
+        'Image',
+        class extends EventTarget {
+          src = '';
+          complete = false;
+          constructor() {
+            super();
+            captured.push(this);
+          }
+        },
+      );
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('gimage draws once the image load event fires', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gimage', 'https://example.test/a.png', 1, 2);
+      expect(ctx.drawImage).not.toHaveBeenCalled();
+      createdImages[0].complete = true;
+      createdImages[0].dispatchEvent(new Event('load'));
+      expect(ctx.drawImage).toHaveBeenCalledWith(createdImages[0], 1, 2);
+    });
+
+    it('gimage reuses the cached image and draws synchronously on repeat', () => {
+      const { plugin, ctx } = openPlugin();
+      call(plugin, 'gimage', 'https://example.test/a.png', 1, 2);
+      createdImages[0].complete = true;
+      createdImages[0].dispatchEvent(new Event('load'));
+      call(plugin, 'gimage', 'https://example.test/a.png', 5, 6, 30, 40);
+      expect(ctx.drawImage).toHaveBeenCalledWith(createdImages[0], 5, 6, 30, 40);
+      expect(createdImages).toHaveLength(1);
+    });
+
+    it('prints a diagnostic when the image fails to load', () => {
+      const { plugin } = openPlugin();
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        call(plugin, 'gimage', 'https://example.test/broken.png', 1, 2);
+        createdImages[0].dispatchEvent(new Event('error'));
+        expect(spy).toHaveBeenCalledWith('Can not load image: https://example.test/broken.png\n');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('gpattern prints a diagnostic instead of assigning a null pattern', () => {
+      const { plugin, ctx } = openPlugin();
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        call(plugin, 'gpattern', 'https://example.test/p.png', 'repeat');
+        createdImages[0].complete = true;
+        createdImages[0].dispatchEvent(new Event('load'));
+        expect(spy).toHaveBeenCalledWith(
+          'Can not set pattern. The image could not be used as a pattern.\n',
+        );
+        // gopen leaves fillStyle at '#000000'; the null pattern must not change it.
+        expect(ctx.fillStyle).toBe('#000000');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('gpattern installs the created pattern as fillStyle', () => {
+      const { plugin, ctx } = openPlugin();
+      const pattern = { kind: 'pattern' };
+      ctx.createPattern.mockReturnValue(pattern);
+      call(plugin, 'gpattern', 'https://example.test/p.png', 'repeat-y');
+      createdImages[0].complete = true;
+      createdImages[0].dispatchEvent(new Event('load'));
+      expect(ctx.createPattern).toHaveBeenCalledWith(createdImages[0], 'repeat-y');
+      expect(ctx.fillStyle).toBe(pattern);
+    });
+
+    it('#print falls back to console.error when no process shim exists', () => {
+      const { plugin } = makePlugin();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.stubGlobal('process', undefined);
+      try {
+        plugin.gAlpha(arguments_(0));
+        expect(consoleSpy).toHaveBeenCalledWith('The canvas is closed and cannot be executed.');
+      } finally {
+        consoleSpy.mockRestore();
+      }
+    });
+
+    it('gclear paints with the given color and restores the previous fillStyle', () => {
+      const { plugin, ctx } = openPlugin();
+      ctx.fillStyle = 'blue';
+      let seen = '';
+      ctx.fillRect.mockImplementation(() => {
+        seen = ctx.fillStyle;
+      });
+      expect(call(plugin, 'gclear', 'red')).toBe(InterpretedSymbol.of('t'));
+      expect(seen).toBe('red');
+      expect(ctx.fillStyle).toBe('blue');
+    });
+
+    it('gclear without arguments still paints white', () => {
+      const { plugin, ctx } = openPlugin();
+      let seen = '';
+      ctx.fillRect.mockImplementation(() => {
+        seen = ctx.fillStyle;
+      });
+      call(plugin, 'gclear');
+      expect(seen).toBe('#ffffff');
+    });
+  });
+
+  describe('API design cleanups (#32)', () => {
+    it('gtext-direction is the primary name and gtext-dire still works as an alias', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gtext-direction', 'rtl')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.direction).toBe('rtl');
+      expect(call(plugin, 'gtext-dire', 'ltr')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.direction).toBe('ltr');
+    });
+
+    it('gtext-baseline is the primary name and gtext-line still works as an alias', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gtext-baseline', 'middle')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.textBaseline).toBe('middle');
+      expect(call(plugin, 'gtext-line', 'top')).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.textBaseline).toBe('top');
+    });
+
+    it('gpattern accepts a string repetition keyword', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gpattern', 'https://example.test/p.png', 'repeat-x')).toBe(
+        InterpretedSymbol.of('t'),
+      );
+    });
+
+    it('gpattern rejects the legacy numeric repetition flag', () => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, 'gpattern', 'https://example.test/p.png', 1)).toBe(Cons.nil);
+    });
+
+    const invalidEnumCases: Array<{ name: string; args: LispValue[] }> = [
+      { name: 'gline-cap', args: ['bogus'] },
+      { name: 'gline-join', args: ['bogus'] },
+      { name: 'gtext-align', args: ['bogus'] },
+      { name: 'gtext-baseline', args: ['bogus'] },
+      { name: 'gtext-direction', args: ['bogus'] },
+      { name: 'gcomposite', args: ['bogus'] },
+      { name: 'gfont-kerning', args: ['bogus'] },
+      { name: 'gfont-stretch', args: ['bogus'] },
+      { name: 'gfont-variant', args: ['bogus'] },
+      { name: 'gtext-rendering', args: ['bogus'] },
+      { name: 'gpattern', args: ['src', 'bogus'] },
+    ];
+
+    it.each(invalidEnumCases)('$name rejects a value outside the allowlist', ({ name, args }) => {
+      const { plugin } = openPlugin();
+      expect(call(plugin, name, ...args)).toBe(Cons.nil);
+    });
+  });
+
   describe('error paths', () => {
     describe('closed canvas', () => {
-      // Iterator helpers (`keys().map().toArray()`) are not typed under the
-      // ES2022 lib this project compiles against, so spread the iterator.
-      // eslint-disable-next-line unicorn/prefer-iterator-to-array
-      const closedSymbols = [...GraphicsPlugin.buildInFunctions.keys()]
-        .map(String)
-        .filter((name) => name !== 'gopen');
+      const closedSymbols = GraphicsPlugin.functionNames().filter((name) => name !== 'gopen');
 
       it.each(closedSymbols)('%s returns nil when the canvas is closed', (name) => {
         const { plugin } = makePlugin();
@@ -786,6 +1216,33 @@ describe('GraphicsPlugin', () => {
         { name: 'gtranslate', args: [1, 'x'] },
         { name: 'grect', args: [1, 2, 3, 'x'] },
         { name: 'grotate', args: ['x'] },
+        { name: 'gellipse', args: [1, 2, 3, 4, 5, 6, 7, 'x'] },
+        { name: 'ground-rect', args: [1, 2, 3, 4, 'x'] },
+        { name: 'gline-dash', args: ['x'] },
+        { name: 'gline-dash-offset', args: ['x'] },
+        { name: 'gmiter-limit', args: ['x'] },
+        { name: 'gis-point-in-path', args: [1, 'x'] },
+        { name: 'gis-point-in-stroke', args: [1, 'x'] },
+        { name: 'gtransform', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'gset-transform', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'gcomposite', args: [1] },
+        { name: 'gfilter', args: [1] },
+        { name: 'gimage-smoothing', args: [1] },
+        { name: 'gmeasure-text', args: [1] },
+        { name: 'gletter-spacing', args: [1] },
+        { name: 'gword-spacing', args: [1] },
+        { name: 'gfont-kerning', args: [1] },
+        { name: 'gfont-stretch', args: [1] },
+        { name: 'gfont-variant', args: [1] },
+        { name: 'gtext-rendering', args: [1] },
+        { name: 'gclear-rect', args: [1, 2, 3, 'x'] },
+        { name: 'gpixel', args: [1, 'x'] },
+        { name: 'gset-pixel', args: [1, 2, 3, 4, 5, 'x'] },
+        { name: 'glinear-gradient', args: ['x', 0, 100, 0, 0, 'red', 1, 'blue'] },
+        { name: 'gradial-gradient', args: ['x', 0, 0, 0, 0, 40, 0, 'red', 1, 'blue'] },
+        { name: 'gconic-gradient', args: ['x', 0, 0, 0, 'red', 1, 'blue'] },
+        { name: 'gfill-text', args: ['a', 1, 2, 'x'] },
+        { name: 'gstroke-text', args: ['a', 1, 2, 'x'] },
       ];
 
       it.each(typeMismatchCases)(
@@ -841,6 +1298,25 @@ describe('GraphicsPlugin', () => {
         { name: 'gtranslate', args: [1] },
         { name: 'grect', args: [1, 2, 3] },
         { name: 'grotate', args: [1, 2] },
+        { name: 'gellipse', args: [1, 2, 3, 4, 5, 6, 7] },
+        { name: 'ground-rect', args: [1, 2, 3, 4] },
+        { name: 'gline-dash-offset', args: [1, 2] },
+        { name: 'gmiter-limit', args: [1, 2] },
+        { name: 'gis-point-in-path', args: [1] },
+        { name: 'gis-point-in-stroke', args: [1] },
+        { name: 'gtransform', args: [1, 2, 3, 4, 5] },
+        { name: 'gset-transform', args: [1, 2, 3, 4, 5] },
+        { name: 'gcomposite', args: ['multiply', 'screen'] },
+        { name: 'gfilter', args: [] },
+        { name: 'gimage-smoothing', args: [] },
+        { name: 'gmeasure-text', args: [] },
+        { name: 'gletter-spacing', args: ['1px', '2px'] },
+        { name: 'gclear-rect', args: [1, 2, 3] },
+        { name: 'gpixel', args: [1] },
+        { name: 'gset-pixel', args: [1, 2, 3, 4, 5] },
+        { name: 'glinear-gradient', args: [0, 0, 100, 0] },
+        { name: 'gradial-gradient', args: [0, 0, 0, 0, 0, 40] },
+        { name: 'gconic-gradient', args: [0, 0, 0] },
       ];
 
       it.each(arityCases)('$name returns nil for a wrong argument count', ({ name, args }) => {
@@ -849,6 +1325,160 @@ describe('GraphicsPlugin', () => {
         const result = plugin.apply(InterpretedSymbol.of(name), arguments_(...args), makeContext());
         expect(result).toBe(Cons.nil);
       });
+    });
+  });
+
+  describe('exception paths (#34)', () => {
+    type ThrowCase = { name: string; member: string; kind: 'method' | 'setter'; args: LispValue[] };
+    const throwCases: ThrowCase[] = [
+      { name: 'galpha', member: 'globalAlpha', kind: 'setter', args: [0.5] },
+      { name: 'garc', member: 'arc', kind: 'method', args: [1, 2, 3, 4, 5, 6] },
+      { name: 'garc-to', member: 'arcTo', kind: 'method', args: [1, 2, 3, 4, 5] },
+      { name: 'gbezcurve-to', member: 'bezierCurveTo', kind: 'method', args: [1, 2, 3, 4, 5, 6] },
+      { name: 'gclear', member: 'fillRect', kind: 'method', args: [] },
+      { name: 'gclose', member: 'clearRect', kind: 'method', args: [] },
+      { name: 'gcolor', member: 'fillStyle', kind: 'setter', args: ['red'] },
+      { name: 'gfill', member: 'fill', kind: 'method', args: [] },
+      { name: 'gfill-color', member: 'fillStyle', kind: 'setter', args: ['red'] },
+      { name: 'gfill-rect', member: 'fillRect', kind: 'method', args: [1, 2, 3, 4] },
+      { name: 'gfill-text', member: 'fillText', kind: 'method', args: ['a', 1, 2] },
+      { name: 'gfill-tri', member: 'moveTo', kind: 'method', args: [1, 2, 3, 4, 5, 6] },
+      { name: 'gfinish-path', member: 'closePath', kind: 'method', args: [] },
+      { name: 'gline-cap', member: 'lineCap', kind: 'setter', args: ['butt'] },
+      { name: 'gline-to', member: 'lineTo', kind: 'method', args: [1, 2] },
+      { name: 'gline-width', member: 'lineWidth', kind: 'setter', args: [2] },
+      { name: 'gmove-to', member: 'moveTo', kind: 'method', args: [1, 2] },
+      { name: 'gquadcurve-to', member: 'quadraticCurveTo', kind: 'method', args: [1, 2, 3, 4] },
+      { name: 'grect', member: 'rect', kind: 'method', args: [1, 2, 3, 4] },
+      { name: 'grotate', member: 'rotate', kind: 'method', args: [45] },
+      { name: 'gsave', member: 'save', kind: 'method', args: [] },
+      { name: 'grestore', member: 'restore', kind: 'method', args: [] },
+      { name: 'gscale', member: 'scale', kind: 'method', args: [2, 2] },
+      { name: 'gshadow-color', member: 'shadowColor', kind: 'setter', args: ['red'] },
+      { name: 'gstart-path', member: 'beginPath', kind: 'method', args: [] },
+      { name: 'gstroke', member: 'stroke', kind: 'method', args: [] },
+      { name: 'gstroke-color', member: 'strokeStyle', kind: 'setter', args: ['red'] },
+      { name: 'gstroke-rect', member: 'strokeRect', kind: 'method', args: [1, 2, 3, 4] },
+      { name: 'gstroke-text', member: 'strokeText', kind: 'method', args: ['a', 1, 2] },
+      { name: 'gstroke-tri', member: 'beginPath', kind: 'method', args: [1, 2, 3, 4, 5, 6] },
+      { name: 'gtext-font', member: 'font', kind: 'setter', args: ['16px serif'] },
+      { name: 'gtranslate', member: 'translate', kind: 'method', args: [1, 2] },
+      { name: 'gellipse', member: 'ellipse', kind: 'method', args: [1, 2, 3, 4, 5, 6, 7, 1] },
+    ];
+
+    it.each(throwCases)(
+      '$name returns nil when the context throws',
+      ({ name, member, kind, args }) => {
+        const { plugin, ctx } = openPlugin();
+        const target = ctx as unknown as Record<string, unknown>;
+        if (kind === 'method') {
+          target[member] = () => {
+            throw new Error('boom');
+          };
+        } else {
+          Object.defineProperty(target, member, {
+            set() {
+              throw new Error('boom');
+            },
+          });
+        }
+        expect(call(plugin, name, ...args)).toBe(Cons.nil);
+      },
+    );
+
+    it('gopen returns nil when the context throws during the initial clear', () => {
+      const { plugin } = makePlugin();
+      const target = plugin.ctx as unknown as Record<string, unknown>;
+      target.fillRect = () => {
+        throw new Error('boom');
+      };
+      expect(call(plugin, 'gopen')).toBe(Cons.nil);
+    });
+
+    it('gsleep busy-waits and returns t', () => {
+      const { plugin } = openPlugin();
+      const start = Date.now();
+      expect(call(plugin, 'gsleep', 5)).toBe(InterpretedSymbol.of('t'));
+      expect(Date.now() - start).toBeGreaterThanOrEqual(4);
+    });
+  });
+
+  describe('save path coverage (#34)', () => {
+    /** Builds a plugin around an OffscreenCanvas-like object (no toDataURL). */
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- only used by this describe block
+    function makeOffscreenPlugin(convertToBlob: () => Promise<unknown>): GraphicsPlugin {
+      const fake = {
+        width: 10,
+        height: 10,
+        getContext: () => makeFakeContext() as unknown as OffscreenCanvasRenderingContext2D,
+        convertToBlob,
+      } as unknown as OffscreenCanvas;
+      const plugin = new GraphicsPlugin(fake);
+      call(plugin, 'gopen');
+      return plugin;
+    }
+
+    it('gsave-png without toDataURL support returns nil with a guard message', () => {
+      const plugin = makeOffscreenPlugin(() => Promise.resolve({}));
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        expect(call(plugin, 'gsave-png')).toBe(Cons.nil);
+        expect(spy).toHaveBeenCalledWith(
+          'Can not save png. Browser download needs a DOM and an HTMLCanvasElement; pass a file path to save on Node.js.\n',
+        );
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('gsave-png writes via convertToBlob for an OffscreenCanvas-like canvas', async () => {
+      const payload = new TextEncoder().encode('png-bytes');
+      const plugin = makeOffscreenPlugin(() =>
+        Promise.resolve({ arrayBuffer: () => Promise.resolve(payload.buffer) }),
+      );
+      const directory = mkdtempSync(path.join(tmpdir(), 'graphics-plugin-'));
+      const filePath = path.join(directory, 'offscreen.png');
+      try {
+        expect(call(plugin, 'gsave-png', filePath)).toBe(InterpretedSymbol.of('t'));
+        await vi.waitFor(() => {
+          // eslint-disable-next-line security/detect-non-literal-fs-filename -- reads back the temp file this test created
+          expect(readFileSync(filePath, 'utf8')).toBe('png-bytes');
+        });
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
+    it('gsave-png with a path returns nil when Node fs is unavailable', () => {
+      const { plugin } = openPlugin();
+      const write = vi.fn().mockReturnValue(true);
+      vi.stubGlobal('process', { stderr: { write } });
+      try {
+        expect(call(plugin, 'gsave-png', 'never-written.png')).toBe(Cons.nil);
+        expect(write).toHaveBeenCalledWith(
+          'Can not save png. Saving to a file path requires Node.js.\n',
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('gsave-jpeg download returns nil when toDataURL throws (tainted canvas)', () => {
+      const { canvas, plugin } = makePlugin();
+      call(plugin, 'gopen');
+      canvas.toDataURL = () => {
+        throw new Error('tainted');
+      };
+      expect(call(plugin, 'gsave-jpeg')).toBe(Cons.nil);
+    });
+
+    it('gsave-jpeg with a path returns nil when toDataURL throws', () => {
+      const { canvas, plugin } = makePlugin();
+      call(plugin, 'gopen');
+      canvas.toDataURL = () => {
+        throw new Error('tainted');
+      };
+      expect(call(plugin, 'gsave-jpeg', 'never-written.jpeg')).toBe(Cons.nil);
     });
   });
 

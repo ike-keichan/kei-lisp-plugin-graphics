@@ -1,36 +1,125 @@
-/* eslint-disable unicorn/prefer-add-event-listener,
-                  unicorn/prefer-math-min-max,
+/* eslint-disable unicorn/prefer-math-min-max,
                   sonarjs/no-nested-conditional,
                   sonarjs/no-duplicate-string */
 
 // These lint rules are disabled file-wide so the ported handlers can preserve
-// the legacy Graphist patterns (Image#onload, clamp ternaries, mode-flag
-// ternaries, repeated diagnostic strings) without per-line escape hatches.
+// the legacy Graphist patterns (clamp ternaries, mode-flag ternaries,
+// repeated diagnostic strings) without per-line escape hatches.
 
 import type { KeiLispPlugin, LispValue, PluginContext } from 'kei-lisp';
 import { Cons, InterpretedSymbol } from 'kei-lisp';
+
+// Allowed values for the enum-string setters, mirroring the Canvas 2D API
+// types. Invalid values are rejected with a diagnostic instead of being
+// silently ignored by the canvas.
+const LINE_CAPS = new Set<string>(['butt', 'round', 'square']);
+const LINE_JOINS = new Set<string>(['miter', 'round', 'bevel']);
+const TEXT_ALIGNS = new Set<string>(['left', 'right', 'center', 'start', 'end']);
+const TEXT_BASELINES = new Set<string>([
+  'top',
+  'hanging',
+  'middle',
+  'alphabetic',
+  'ideographic',
+  'bottom',
+]);
+const TEXT_DIRECTIONS = new Set<string>(['ltr', 'rtl', 'inherit']);
+const FONT_KERNINGS = new Set<string>(['auto', 'normal', 'none']);
+const FONT_STRETCHES = new Set<string>([
+  'ultra-condensed',
+  'extra-condensed',
+  'condensed',
+  'semi-condensed',
+  'normal',
+  'semi-expanded',
+  'expanded',
+  'extra-expanded',
+  'ultra-expanded',
+]);
+const FONT_VARIANTS = new Set<string>([
+  'normal',
+  'small-caps',
+  'all-small-caps',
+  'petite-caps',
+  'all-petite-caps',
+  'unicase',
+  'titling-caps',
+]);
+const TEXT_RENDERINGS = new Set<string>([
+  'auto',
+  'optimizeSpeed',
+  'optimizeLegibility',
+  'geometricPrecision',
+]);
+const PATTERN_REPETITIONS = new Set<string>(['repeat', 'repeat-x', 'repeat-y', 'no-repeat']);
+const COMPOSITE_OPERATIONS = new Set<string>([
+  'source-over',
+  'source-in',
+  'source-out',
+  'source-atop',
+  'destination-over',
+  'destination-in',
+  'destination-out',
+  'destination-atop',
+  'lighter',
+  'copy',
+  'xor',
+  'multiply',
+  'screen',
+  'overlay',
+  'darken',
+  'lighten',
+  'color-dodge',
+  'color-burn',
+  'hard-light',
+  'soft-light',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+]);
 
 /**
  * @class
  * @classdesc Canvas2D drawing plugin for the kei-lisp interpreter. Implements
  *            the `KeiLispPlugin` contract (`name` / `has` / `apply`) and
- *            exposes 45 `g…` Lisp functions that proxy to a 2D rendering
+ *            exposes 75 `g…` Lisp functions that proxy to a 2D rendering
  *            context.
  * @author Keisuke Ikeda
- * @this {GraphicsPlugin}
  */
-export class GraphicsPlugin extends Object implements KeiLispPlugin {
+export class GraphicsPlugin implements KeiLispPlugin {
   /**
    * Dispatch map from a Lisp function name (InterpretedSymbol) to the name of
-   * the GraphicsPlugin method that implements it.
+   * the GraphicsPlugin method that implements it. Private so hosts cannot
+   * mutate the registered function set.
    */
-  static readonly buildInFunctions: Map<InterpretedSymbol, string> = GraphicsPlugin.setup();
+  static readonly #builtInFunctions: Map<InterpretedSymbol, string> = GraphicsPlugin.#setup();
+
+  /**
+   * Lists every Lisp function name this plugin registers.
+   * @return the sorted `g…` function names
+   */
+  static functionNames(): string[] {
+    // Iterator helpers and Array#toSorted are not typed under the ES2022 lib
+    // this project compiles against, so spread the iterator and sort a copy.
+    return (
+      // eslint-disable-next-line unicorn/prefer-iterator-to-array
+      [...GraphicsPlugin.#builtInFunctions.keys()]
+        .map(String)
+        // Array#toSorted is not typed under the ES2022 lib this project
+        // compiles against, so sort a fresh copy in place.
+        // eslint-disable-next-line unicorn/no-array-sort
+        .sort((a, b) => a.localeCompare(b))
+    );
+  }
 
   /**
    * Builds the dispatch table.
    * @return the dispatch table
    */
-  static setup(): Map<InterpretedSymbol, string> {
+  static #setup(): Map<InterpretedSymbol, string> {
     const aTable = new Map<InterpretedSymbol, string>();
     aTable.set(InterpretedSymbol.of('galpha'), 'gAlpha');
     aTable.set(InterpretedSymbol.of('garc'), 'gArc');
@@ -69,16 +158,57 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     aTable.set(InterpretedSymbol.of('gstroke-text'), 'gStrokeText');
     aTable.set(InterpretedSymbol.of('gstroke-tri'), 'gStrokeTri');
     aTable.set(InterpretedSymbol.of('gtext-align'), 'gTextAlign');
-    aTable.set(InterpretedSymbol.of('gtext-dire'), 'gTextDirection');
+    aTable.set(InterpretedSymbol.of('gtext-direction'), 'gTextDirection');
     aTable.set(InterpretedSymbol.of('gtext-font'), 'gTextFont');
+    aTable.set(InterpretedSymbol.of('gtext-baseline'), 'gTextBaseline');
+    // Deprecated aliases kept for backward compatibility with the legacy
+    // Graphist names; prefer gtext-direction / gtext-baseline.
+    aTable.set(InterpretedSymbol.of('gtext-dire'), 'gTextDirection');
     aTable.set(InterpretedSymbol.of('gtext-line'), 'gTextBaseline');
     aTable.set(InterpretedSymbol.of('gtranslate'), 'gTranslate');
     aTable.set(InterpretedSymbol.of('grect'), 'gRect');
     aTable.set(InterpretedSymbol.of('grotate'), 'gRotate');
     aTable.set(InterpretedSymbol.of('gsave'), 'gSave');
     aTable.set(InterpretedSymbol.of('grestore'), 'gRestore');
+    aTable.set(InterpretedSymbol.of('gellipse'), 'gEllipse');
+    aTable.set(InterpretedSymbol.of('ground-rect'), 'gRoundRect');
+    aTable.set(InterpretedSymbol.of('gline-dash'), 'gLineDash');
+    aTable.set(InterpretedSymbol.of('gline-dash-offset'), 'gLineDashOffset');
+    aTable.set(InterpretedSymbol.of('gmiter-limit'), 'gMiterLimit');
+    aTable.set(InterpretedSymbol.of('gclip'), 'gClip');
+    aTable.set(InterpretedSymbol.of('gis-point-in-path'), 'gIsPointInPath');
+    aTable.set(InterpretedSymbol.of('gis-point-in-stroke'), 'gIsPointInStroke');
+    aTable.set(InterpretedSymbol.of('gtransform'), 'gTransform');
+    aTable.set(InterpretedSymbol.of('gset-transform'), 'gSetTransform');
+    aTable.set(InterpretedSymbol.of('greset-transform'), 'gResetTransform');
+    aTable.set(InterpretedSymbol.of('gcomposite'), 'gComposite');
+    aTable.set(InterpretedSymbol.of('gfilter'), 'gFilter');
+    aTable.set(InterpretedSymbol.of('gimage-smoothing'), 'gImageSmoothing');
+    aTable.set(InterpretedSymbol.of('gmeasure-text'), 'gMeasureText');
+    aTable.set(InterpretedSymbol.of('gletter-spacing'), 'gLetterSpacing');
+    aTable.set(InterpretedSymbol.of('gword-spacing'), 'gWordSpacing');
+    aTable.set(InterpretedSymbol.of('gfont-kerning'), 'gFontKerning');
+    aTable.set(InterpretedSymbol.of('gfont-stretch'), 'gFontStretch');
+    aTable.set(InterpretedSymbol.of('gfont-variant'), 'gFontVariant');
+    aTable.set(InterpretedSymbol.of('gtext-rendering'), 'gTextRendering');
+    aTable.set(InterpretedSymbol.of('gclear-rect'), 'gClearRect');
+    aTable.set(InterpretedSymbol.of('greset'), 'gReset');
+    aTable.set(InterpretedSymbol.of('gwidth'), 'gWidth');
+    aTable.set(InterpretedSymbol.of('gheight'), 'gHeight');
+    aTable.set(InterpretedSymbol.of('gpixel'), 'gPixel');
+    aTable.set(InterpretedSymbol.of('gset-pixel'), 'gSetPixel');
+    aTable.set(InterpretedSymbol.of('glinear-gradient'), 'gLinearGradient');
+    aTable.set(InterpretedSymbol.of('gradial-gradient'), 'gRadialGradient');
+    aTable.set(InterpretedSymbol.of('gconic-gradient'), 'gConicGradient');
     return aTable;
   }
+
+  /**
+   * Loaded-image cache shared by `gimage` and `gpattern`. Repeated draws of
+   * the same `src` reuse the loaded element and run synchronously, so they
+   * keep their place in the drawing order instead of racing the load.
+   */
+  readonly #imageCache = new Map<string, HTMLImageElement>();
 
   /**
    * Plugin identifier, used for diagnostics.
@@ -95,23 +225,181 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
    * @param canvas - the canvas to draw to
    */
   constructor(canvas: HTMLCanvasElement | OffscreenCanvas) {
-    super();
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.isOpen = false;
   }
 
   /**
-   * Writes a diagnostic line directly to `process.stderr`, matching the
-   * convention used by kei-lisp itself (`Applier.format` writes to
-   * `process.stdout`). In a Node runtime this hits the real stderr; in a
-   * browser kei-lisp host (e.g. kei-lisp-web) the host typically swaps
-   * `process.stderr.write` for a sink that routes to the REPL output panel,
-   * so the same call reaches the user via the host's normal output channel.
+   * Writes a diagnostic line to `process.stderr`, matching the convention
+   * used by kei-lisp itself (`Applier.format` writes to `process.stdout`).
+   * In a Node runtime this hits the real stderr; in a browser kei-lisp host
+   * (e.g. kei-lisp-web) the host typically swaps `process.stderr.write` for
+   * a sink that routes to the REPL output panel. In a plain browser with no
+   * `process` shim at all, the line falls back to `console.error` instead of
+   * throwing.
    * @param line - the line to write
    */
   #print(line: string): void {
-    process.stderr.write(line + '\n');
+    const stderr = (globalThis as { process?: { stderr?: { write?: (chunk: string) => boolean } } })
+      .process?.stderr;
+    if (typeof stderr?.write === 'function') {
+      stderr.write(line + '\n');
+      return;
+    }
+    console.error(line);
+  }
+
+  /**
+   * Resolves an image for the given source and runs `draw` with it —
+   * synchronously when the image is already loaded, on its `load` event
+   * otherwise. A load failure prints a diagnostic once.
+   * @param source - the image URL / data URI
+   * @param draw - the drawing action to run once the image is available
+   */
+  #withImage(source: string, draw: (image: HTMLImageElement) => void): void {
+    const cached = this.#imageCache.get(source);
+    const image = cached ?? new Image();
+    if (cached === undefined) {
+      image.src = source;
+      this.#imageCache.set(source, image);
+      image.addEventListener('error', () => {
+        this.#print(`Can not load image: ${source}`);
+      });
+    }
+    if (image.complete) {
+      draw(image);
+      return;
+    }
+    image.addEventListener('load', () => {
+      draw(image);
+    });
+  }
+
+  /**
+   * Shared guard-and-dispatch skeleton for the newer `g…` methods: checks the
+   * context and the open flag, runs `body`, and converts both a `null` return
+   * and a thrown exception into `failureMessage` + `Cons.nil`.
+   * @param failureMessage - the diagnostic printed when `body` fails
+   * @param body - the drawing action; returns the Lisp result, or `null` on
+   *               bad arguments
+   * @return the body's result, or `Cons.nil` on failure
+   */
+  #execute(
+    failureMessage: string,
+    body: (
+      context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    ) => LispValue | null,
+  ): LispValue {
+    if (!this.checkSupport()) return Cons.nil;
+    if (!this.isOpen) {
+      this.#print('The canvas is closed and cannot be executed.');
+      return Cons.nil;
+    }
+    try {
+      const result = body(this.ctx);
+      if (result !== null) return result;
+    } catch {
+      // fall through to the failure message
+    }
+    this.#print(failureMessage);
+    return Cons.nil;
+  }
+
+  /**
+   * Reads a single string argument and validates it against an allowlist.
+   * @param arguments_ - the evaluated argument list
+   * @param allowed - the accepted values
+   * @return the validated string, or `null` on wrong arity, a non-string
+   *         argument, or a value outside the allowlist
+   */
+  #enumString(arguments_: Cons, allowed: ReadonlySet<string>): string | null {
+    if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
+    return allowed.has(arguments_.car) ? arguments_.car : null;
+  }
+
+  /**
+   * Reads exactly `count` numbers from the argument list.
+   * @param arguments_ - the evaluated argument list
+   * @param count - the expected argument count
+   * @return the numbers, or `null` on wrong arity or a non-number argument
+   */
+  #numbers(arguments_: Cons, count: number): number[] | null {
+    if (arguments_.length() !== count) return null;
+    const values: number[] = [];
+    let rest = arguments_;
+    for (let index = 0; index < count; index++) {
+      if (!Cons.isNumber(rest.car)) return null;
+      values.push(rest.car);
+      rest = rest.cdr as Cons;
+    }
+    return values;
+  }
+
+  /**
+   * Flattens the argument list into a JS array.
+   * @param arguments_ - the evaluated argument list
+   * @return the argument values in order
+   */
+  #listValues(arguments_: Cons): LispValue[] {
+    const values: LispValue[] = [];
+    let rest = arguments_;
+    for (let index = arguments_.length(); index > 0; index--) {
+      values.push(rest.car);
+      rest = rest.cdr as Cons;
+    }
+    return values;
+  }
+
+  /**
+   * Builds a Lisp list (Cons chain) from JS values.
+   * @param values - the values, at least one
+   * @return the list head
+   */
+  #toList(values: LispValue[]): Cons {
+    const head = new Cons(values[0]);
+    let tail = head;
+    for (let index = 1; index < values.length; index++) {
+      tail.cdr = new Cons(values[index]);
+      tail = tail.cdr;
+    }
+    return head;
+  }
+
+  /**
+   * Applies `(offset color)` pairs to a gradient.
+   * @param gradient - the gradient to add stops to
+   * @param stops - alternating numeric offsets (0–1) and CSS color strings
+   * @return true when every pair was valid and at least one was applied
+   */
+  #applyGradientStops(gradient: CanvasGradient, stops: LispValue[]): boolean {
+    if (stops.length === 0 || stops.length % 2 !== 0) return false;
+    for (let index = 0; index < stops.length; index += 2) {
+      const offset = stops[index];
+      const color = stops[index + 1];
+      if (!Cons.isNumber(offset) || !Cons.isString(color)) return false;
+      gradient.addColorStop(offset, color);
+    }
+    return true;
+  }
+
+  /**
+   * Sets both `fillStyle` and `strokeStyle` to the given gradient after
+   * applying its stops, mirroring how `gcolor` sets both styles at once.
+   * @param context - the 2D context
+   * @param gradient - the gradient to install
+   * @param stops - alternating offsets and colors (see #applyGradientStops)
+   * @return `t` on success, `null` on invalid stops
+   */
+  #installGradient(
+    context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    gradient: CanvasGradient,
+    stops: LispValue[],
+  ): LispValue | null {
+    if (!this.#applyGradientStops(gradient, stops)) return null;
+    context.fillStyle = gradient;
+    context.strokeStyle = gradient;
+    return InterpretedSymbol.of('t');
   }
 
   /**
@@ -193,7 +481,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
    * @return true if `apply` should be called
    */
   has(aSymbol: InterpretedSymbol): boolean {
-    return GraphicsPlugin.buildInFunctions.has(aSymbol);
+    return GraphicsPlugin.#builtInFunctions.has(aSymbol);
   }
 
   /**
@@ -204,47 +492,19 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
    * @return the method's result, or `Cons.nil` if dispatch fails
    */
   apply(aSymbol: InterpretedSymbol, arguments_: Cons, _context: PluginContext): LispValue {
-    return this.selectProcedure(aSymbol, arguments_);
-  }
-
-  /**
-   * Resolves the procedure name and invokes the matching method.
-   * @param procedure - the Lisp symbol
-   * @param arguments_ - the evaluated argument list
-   * @return the method's result, or `Cons.nil` if not registered
-   */
-  selectProcedure(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
-    if (GraphicsPlugin.buildInFunctions.has(procedure)) {
-      return this.buildInFunction(procedure, arguments_);
+    const methodName = GraphicsPlugin.#builtInFunctions.get(aSymbol);
+    if (methodName === undefined) {
+      this.#print(`I could find no procedure description for ${String(aSymbol)}`);
+      return Cons.nil;
     }
-    this.#print(`I could find no procedure description for ${String(procedure)}`);
-    return Cons.nil;
-  }
-
-  /**
-   * Looks up and invokes the JS method that implements the given Lisp symbol.
-   * Throws `TypeError` when the dispatch table points to a method that does
-   * not exist on the instance — this matches the legacy behavior, where the
-   * Ramda `R.invoker(1, methodName)(args, this)` call would surface the same
-   * error by attempting to call `undefined`.
-   * @param procedure - the Lisp symbol
-   * @param arguments_ - the evaluated argument list
-   * @return the method's result
-   */
-  buildInFunction(procedure: InterpretedSymbol, arguments_: Cons): LispValue {
-    const methodName = GraphicsPlugin.buildInFunctions.get(procedure) as string;
-    const target = this as unknown as Record<string, unknown>;
-    const method = target[methodName];
-    if (typeof method !== 'function') {
-      throw new TypeError(`${this.constructor.name} does not have a method named "${methodName}"`);
-    }
-    return (method as (arguments__: Cons) => LispValue).call(this, arguments_);
+    const target = this as unknown as Record<string, (arguments__: Cons) => LispValue>;
+    return target[methodName].call(this, arguments_);
   }
 
   /**
    * Checks whether the canvas exposes a usable 2D context, and narrows
    * `this.ctx` to non-null for the caller when it returns true.
-   * @return type predicate — true when ctx is non-null
+   * @return type predicate — true when context is non-null
    */
   checkSupport(): this is GraphicsPlugin & {
     ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -391,21 +651,15 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     return Cons.nil;
   }
 
-  gClear(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.fillStyle = '#000000';
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not clear.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+  gClear(arguments_: Cons): LispValue {
+    return this.#execute('Can not clear.', (context) => {
+      const aColor = arguments_.length() === 0 ? '#ffffff' : this.selectColor(arguments_);
+      const previous = context.fillStyle;
+      context.fillStyle = aColor;
+      context.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      context.fillStyle = previous;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gClose(): LispValue {
@@ -509,29 +763,19 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gFillText(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 3) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
-            this.ctx.fillText(a0, a1, a2);
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw fill text.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw fill text.');
-        return Cons.nil;
+    return this.#execute('Can not draw fill text.', (context) => {
+      const length_ = arguments_.length();
+      if (length_ !== 3 && length_ !== 4) return null;
+      const [a0, a1, a2, a3] = this.#listValues(arguments_);
+      if (!Cons.isString(a0) || !Cons.isNumber(a1) || !Cons.isNumber(a2)) return null;
+      if (length_ === 4) {
+        if (!Cons.isNumber(a3)) return null;
+        context.fillText(a0, a1, a2, a3);
+      } else {
+        context.fillText(a0, a1, a2);
       }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gFillTri(arguments_: Cons): LispValue {
@@ -593,60 +837,23 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gImage(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        const length_ = arguments_.length();
-        if (length_ === 3) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
-            const context = this.ctx;
-            const anImage = new Image();
-            anImage.src = a0;
-            anImage.onload = () => {
-              context.drawImage(anImage, a1, a2);
-            };
-            return InterpretedSymbol.of('t');
-          }
-        } else if (length_ === 5) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          if (
-            Cons.isString(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4)
-          ) {
-            const context = this.ctx;
-            const anImage = new Image();
-            anImage.src = a0;
-            anImage.onload = () => {
-              context.drawImage(anImage, a1, a2, a3, a4);
-            };
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw Image.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw Image.');
-        return Cons.nil;
+    return this.#execute('Can not draw Image.', (context) => {
+      const length_ = arguments_.length();
+      if (length_ !== 3 && length_ !== 5) return null;
+      const [a0, a1, a2, a3, a4] = this.#listValues(arguments_);
+      if (!Cons.isString(a0) || !Cons.isNumber(a1) || !Cons.isNumber(a2)) return null;
+      if (length_ === 5) {
+        if (!Cons.isNumber(a3) || !Cons.isNumber(a4)) return null;
+        this.#withImage(a0, (image) => {
+          context.drawImage(image, a1, a2, a3, a4);
+        });
+      } else {
+        this.#withImage(a0, (image) => {
+          context.drawImage(image, a1, a2);
+        });
       }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gLineTo(arguments_: Cons): LispValue {
@@ -673,41 +880,27 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gLineCap(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.lineCap = arguments_.car as CanvasLineCap;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set line cap.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set line cap.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set line cap. Expected "butt" / "round" / "square".',
+      (context) => {
+        const value = this.#enumString(arguments_, LINE_CAPS);
+        if (value === null) return null;
+        context.lineCap = value as CanvasLineCap;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gLineJoin(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.lineJoin = arguments_.car as CanvasLineJoin;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set line join.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set line join.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set line join. Expected "miter" / "round" / "bevel".',
+      (context) => {
+        const value = this.#enumString(arguments_, LINE_JOINS);
+        if (value === null) return null;
+        context.lineJoin = value as CanvasLineJoin;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gLineWidth(arguments_: Cons): LispValue {
@@ -773,34 +966,23 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gPattern(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 2) {
-          const a0 = arguments_.car;
-          const a1 = (arguments_.cdr as Cons).car;
-          if (Cons.isString(a0) && Cons.isNumber(a1)) {
-            const aString = a1 === 0 ? 'repeat' : a1 > 0 ? 'repeat-x' : 'repeat-y';
-            const context = this.ctx;
-            const anImage = new Image();
-            anImage.src = a0;
-            anImage.onload = () => {
-              // Legacy bug: createPattern() may return null; assigning null to fillStyle
-              // is a no-op in practice (browsers ignore or coerce it).
-              context.fillStyle = context.createPattern(anImage, aString) as CanvasPattern;
-            };
-            return InterpretedSymbol.of('t');
+    return this.#execute(
+      'Can not set pattern. Expected an image source and a repetition ("repeat" / "repeat-x" / "repeat-y" / "no-repeat").',
+      (context) => {
+        if (arguments_.length() !== 2) return null;
+        const [a0, a1] = this.#listValues(arguments_);
+        if (!Cons.isString(a0) || !Cons.isString(a1) || !PATTERN_REPETITIONS.has(a1)) return null;
+        this.#withImage(a0, (image) => {
+          const pattern = context.createPattern(image, a1);
+          if (pattern === null) {
+            this.#print('Can not set pattern. The image could not be used as a pattern.');
+            return;
           }
-        }
-        this.#print('Can not set pattern.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set pattern.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+          context.fillStyle = pattern;
+        });
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gQuadCurveTo(arguments_: Cons): LispValue {
@@ -1051,29 +1233,19 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gStrokeText(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 3) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          if (Cons.isString(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
-            this.ctx.strokeText(a0, a1, a2);
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw stroke text.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw stroke text.');
-        return Cons.nil;
+    return this.#execute('Can not draw stroke text.', (context) => {
+      const length_ = arguments_.length();
+      if (length_ !== 3 && length_ !== 4) return null;
+      const [a0, a1, a2, a3] = this.#listValues(arguments_);
+      if (!Cons.isString(a0) || !Cons.isNumber(a1) || !Cons.isNumber(a2)) return null;
+      if (length_ === 4) {
+        if (!Cons.isNumber(a3)) return null;
+        context.strokeText(a0, a1, a2, a3);
+      } else {
+        context.strokeText(a0, a1, a2);
       }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gStrokeTri(arguments_: Cons): LispValue {
@@ -1121,60 +1293,39 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   }
 
   gTextAlign(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.textAlign = arguments_.car as CanvasTextAlign;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set text align.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set text align.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set text align. Expected "left" / "right" / "center" / "start" / "end".',
+      (context) => {
+        const value = this.#enumString(arguments_, TEXT_ALIGNS);
+        if (value === null) return null;
+        context.textAlign = value as CanvasTextAlign;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gTextBaseline(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.textBaseline = arguments_.car as CanvasTextBaseline;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set text baseline.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set text baseline.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set text baseline. Expected "top" / "hanging" / "middle" / "alphabetic" / "ideographic" / "bottom".',
+      (context) => {
+        const value = this.#enumString(arguments_, TEXT_BASELINES);
+        if (value === null) return null;
+        context.textBaseline = value as CanvasTextBaseline;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gTextDirection(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.direction = arguments_.car as CanvasDirection;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set text direction.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set text direction.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute(
+      'Can not set text direction. Expected "ltr" / "rtl" / "inherit".',
+      (context) => {
+        const value = this.#enumString(arguments_, TEXT_DIRECTIONS);
+        if (value === null) return null;
+        context.direction = value as CanvasDirection;
+        return InterpretedSymbol.of('t');
+      },
+    );
   }
 
   gTextFont(arguments_: Cons): LispValue {
@@ -1269,7 +1420,7 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
   /**
    * Pushes the current drawing state (styles, transform, clip) onto the
    * context's state stack. Pairs with `gRestore` to let Lisp callers manage
-   * state explicitly. Replaces the legacy per-method `ctx.save()` calls, which
+   * state explicitly. Replaces the legacy per-method `context.save()` calls, which
    * pushed state on every draw with no matching `restore()` and grew the stack
    * unbounded.
    * @return `t` on success, `Cons.nil` otherwise
@@ -1307,6 +1458,314 @@ export class GraphicsPlugin extends Object implements KeiLispPlugin {
     }
     this.#print('The canvas is closed and cannot be executed.');
     return Cons.nil;
+  }
+
+  gEllipse(arguments_: Cons): LispValue {
+    return this.#execute('Can not draw ellipse.', (context) => {
+      const a = this.#numbers(arguments_, 8);
+      if (a === null) return null;
+      context.ellipse(
+        a[0],
+        a[1],
+        a[2],
+        a[3],
+        (Math.PI / 180) * a[4],
+        (Math.PI / 180) * a[5],
+        (Math.PI / 180) * a[6],
+        a[7] >= 0,
+      );
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gRoundRect(arguments_: Cons): LispValue {
+    return this.#execute('Can not draw round rectangle.', (context) => {
+      const a = this.#numbers(arguments_, 5);
+      if (a === null) return null;
+      context.roundRect(a[0], a[1], a[2], a[3], a[4]);
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gLineDash(arguments_: Cons): LispValue {
+    return this.#execute('Can not set line dash.', (context) => {
+      const segments = this.#numbers(arguments_, arguments_.length());
+      if (segments === null) return null;
+      context.setLineDash(segments);
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gLineDashOffset(arguments_: Cons): LispValue {
+    return this.#execute('Can not set line dash offset.', (context) => {
+      const a = this.#numbers(arguments_, 1);
+      if (a === null) return null;
+      context.lineDashOffset = a[0];
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gMiterLimit(arguments_: Cons): LispValue {
+    return this.#execute('Can not set miter limit.', (context) => {
+      const a = this.#numbers(arguments_, 1);
+      if (a === null) return null;
+      context.miterLimit = a[0];
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gClip(): LispValue {
+    return this.#execute('Can not clip.', (context) => {
+      context.clip();
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gIsPointInPath(arguments_: Cons): LispValue {
+    return this.#execute('Can not test point in path.', (context) => {
+      const a = this.#numbers(arguments_, 2);
+      if (a === null) return null;
+      return context.isPointInPath(a[0], a[1]) ? InterpretedSymbol.of('t') : Cons.nil;
+    });
+  }
+
+  gIsPointInStroke(arguments_: Cons): LispValue {
+    return this.#execute('Can not test point in stroke.', (context) => {
+      const a = this.#numbers(arguments_, 2);
+      if (a === null) return null;
+      return context.isPointInStroke(a[0], a[1]) ? InterpretedSymbol.of('t') : Cons.nil;
+    });
+  }
+
+  gTransform(arguments_: Cons): LispValue {
+    return this.#execute('Can not transform.', (context) => {
+      const a = this.#numbers(arguments_, 6);
+      if (a === null) return null;
+      context.transform(a[0], a[1], a[2], a[3], a[4], a[5]);
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gSetTransform(arguments_: Cons): LispValue {
+    return this.#execute('Can not set transform.', (context) => {
+      const a = this.#numbers(arguments_, 6);
+      if (a === null) return null;
+      context.setTransform(a[0], a[1], a[2], a[3], a[4], a[5]);
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gResetTransform(): LispValue {
+    return this.#execute('Can not reset transform.', (context) => {
+      context.resetTransform();
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gComposite(arguments_: Cons): LispValue {
+    return this.#execute(
+      'Can not set composite operation. Expected a globalCompositeOperation keyword such as "source-over" / "multiply" / "screen".',
+      (context) => {
+        const value = this.#enumString(arguments_, COMPOSITE_OPERATIONS);
+        if (value === null) return null;
+        context.globalCompositeOperation = value as GlobalCompositeOperation;
+        return InterpretedSymbol.of('t');
+      },
+    );
+  }
+
+  gFilter(arguments_: Cons): LispValue {
+    return this.#execute('Can not set filter.', (context) => {
+      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
+      context.filter = arguments_.car;
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gImageSmoothing(arguments_: Cons): LispValue {
+    return this.#execute('Can not set image smoothing.', (context) => {
+      const quality = arguments_.length() === 1 ? arguments_.car : null;
+      if (quality !== 'off' && quality !== 'low' && quality !== 'medium' && quality !== 'high') {
+        return null;
+      }
+      if (quality === 'off') {
+        context.imageSmoothingEnabled = false;
+      } else {
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = quality;
+      }
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gMeasureText(arguments_: Cons): LispValue {
+    return this.#execute('Can not measure text.', (context) => {
+      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
+      return context.measureText(arguments_.car).width;
+    });
+  }
+
+  gLetterSpacing(arguments_: Cons): LispValue {
+    return this.#execute('Can not set letter spacing.', (context) => {
+      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
+      context.letterSpacing = arguments_.car;
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gWordSpacing(arguments_: Cons): LispValue {
+    return this.#execute('Can not set word spacing.', (context) => {
+      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
+      context.wordSpacing = arguments_.car;
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gFontKerning(arguments_: Cons): LispValue {
+    return this.#execute(
+      'Can not set font kerning. Expected "auto" / "normal" / "none".',
+      (context) => {
+        const value = this.#enumString(arguments_, FONT_KERNINGS);
+        if (value === null) return null;
+        context.fontKerning = value as CanvasFontKerning;
+        return InterpretedSymbol.of('t');
+      },
+    );
+  }
+
+  gFontStretch(arguments_: Cons): LispValue {
+    return this.#execute(
+      'Can not set font stretch. Expected a font-stretch keyword such as "condensed" / "normal" / "expanded".',
+      (context) => {
+        const value = this.#enumString(arguments_, FONT_STRETCHES);
+        if (value === null) return null;
+        context.fontStretch = value as CanvasFontStretch;
+        return InterpretedSymbol.of('t');
+      },
+    );
+  }
+
+  gFontVariant(arguments_: Cons): LispValue {
+    return this.#execute(
+      'Can not set font variant. Expected a font-variant-caps keyword such as "normal" / "small-caps".',
+      (context) => {
+        const value = this.#enumString(arguments_, FONT_VARIANTS);
+        if (value === null) return null;
+        context.fontVariantCaps = value as CanvasFontVariantCaps;
+        return InterpretedSymbol.of('t');
+      },
+    );
+  }
+
+  gTextRendering(arguments_: Cons): LispValue {
+    return this.#execute(
+      'Can not set text rendering. Expected "auto" / "optimizeSpeed" / "optimizeLegibility" / "geometricPrecision".',
+      (context) => {
+        const value = this.#enumString(arguments_, TEXT_RENDERINGS);
+        if (value === null) return null;
+        context.textRendering = value as CanvasTextRendering;
+        return InterpretedSymbol.of('t');
+      },
+    );
+  }
+
+  gClearRect(arguments_: Cons): LispValue {
+    return this.#execute('Can not clear rectangle.', (context) => {
+      const a = this.#numbers(arguments_, 4);
+      if (a === null) return null;
+      context.clearRect(a[0], a[1], a[2], a[3]);
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gReset(): LispValue {
+    return this.#execute('Can not reset.', (context) => {
+      context.reset();
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gWidth(): LispValue {
+    return this.#execute('Can not get width.', () => this.canvas.width);
+  }
+
+  gHeight(): LispValue {
+    return this.#execute('Can not get height.', () => this.canvas.height);
+  }
+
+  gPixel(arguments_: Cons): LispValue {
+    return this.#execute('Can not read pixel.', (context) => {
+      const a = this.#numbers(arguments_, 2);
+      if (a === null) return null;
+      const data = context.getImageData(a[0], a[1], 1, 1).data;
+      return this.#toList([data[0], data[1], data[2], data[3]]);
+    });
+  }
+
+  gSetPixel(arguments_: Cons): LispValue {
+    return this.#execute('Can not write pixel.', (context) => {
+      const a = this.#numbers(arguments_, 6);
+      if (a === null) return null;
+      const imageData = context.createImageData(1, 1);
+      imageData.data[0] = a[2];
+      imageData.data[1] = a[3];
+      imageData.data[2] = a[4];
+      imageData.data[3] = a[5];
+      context.putImageData(imageData, a[0], a[1]);
+      return InterpretedSymbol.of('t');
+    });
+  }
+
+  gLinearGradient(arguments_: Cons): LispValue {
+    return this.#execute('Can not set linear gradient.', (context) => {
+      const [x0, y0, x1, y1, ...stops] = this.#listValues(arguments_);
+      if (
+        stops.length < 2 ||
+        !Cons.isNumber(x0) ||
+        !Cons.isNumber(y0) ||
+        !Cons.isNumber(x1) ||
+        !Cons.isNumber(y1)
+      ) {
+        return null;
+      }
+      return this.#installGradient(context, context.createLinearGradient(x0, y0, x1, y1), stops);
+    });
+  }
+
+  gRadialGradient(arguments_: Cons): LispValue {
+    return this.#execute('Can not set radial gradient.', (context) => {
+      const [x0, y0, r0, x1, y1, r1, ...stops] = this.#listValues(arguments_);
+      if (
+        stops.length < 2 ||
+        !Cons.isNumber(x0) ||
+        !Cons.isNumber(y0) ||
+        !Cons.isNumber(r0) ||
+        !Cons.isNumber(x1) ||
+        !Cons.isNumber(y1) ||
+        !Cons.isNumber(r1)
+      ) {
+        return null;
+      }
+      return this.#installGradient(
+        context,
+        context.createRadialGradient(x0, y0, r0, x1, y1, r1),
+        stops,
+      );
+    });
+  }
+
+  gConicGradient(arguments_: Cons): LispValue {
+    return this.#execute('Can not set conic gradient.', (context) => {
+      const [angle, x, y, ...stops] = this.#listValues(arguments_);
+      if (stops.length < 2 || !Cons.isNumber(angle) || !Cons.isNumber(x) || !Cons.isNumber(y)) {
+        return null;
+      }
+      return this.#installGradient(
+        context,
+        context.createConicGradient((Math.PI / 180) * angle, x, y),
+        stops,
+      );
+    });
   }
 
   /**

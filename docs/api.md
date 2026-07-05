@@ -47,7 +47,7 @@ interface.
 ## `GraphicsPlugin`
 
 The plugin class. Implements `KeiLispPlugin` (`name` / `has` / `apply`) and
-exposes 45 `g…` drawing primitives to the Lisp evaluator.
+exposes 75 `g…` drawing primitives to the Lisp evaluator.
 
 You can instantiate it directly if you need to inspect the instance:
 
@@ -59,3 +59,21 @@ console.log(plugin.name); // "graphics"
 ```
 
 See [graphics](./graphics.md) for the full list of Lisp-callable functions.
+
+### `GraphicsPlugin.functionNames()` (static)
+
+Lists every Lisp function name the plugin registers, sorted alphabetically.
+Useful for hosts that want to display or autocomplete the available drawing
+functions. The list includes the deprecated aliases (`gtext-line`,
+`gtext-dire`).
+
+```ts
+GraphicsPlugin.functionNames();
+// => ["galpha", "garc", "garc-to", ..., "gwidth", "gword-spacing"]
+```
+
+#### Signature
+
+```ts
+static functionNames(): string[];
+```

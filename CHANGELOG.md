@@ -5,6 +5,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-07-04
+
+### Added
+
+- Canvas 2D API のカバレッジを拡大し、30 個の `g…` 関数を追加（45 → 75 関数、#31）
+  - グラデーション: `glinear-gradient` / `gradial-gradient` / `gconic-gradient`
+  - 図形・パス: `gellipse` / `ground-rect` / `gclip` / `gis-point-in-path` / `gis-point-in-stroke`
+  - 線: `gline-dash` / `gline-dash-offset` / `gmiter-limit`
+  - 変形: `gtransform` / `gset-transform` / `greset-transform`
+  - 合成・画質: `gcomposite` / `gfilter` / `gimage-smoothing`
+  - テキスト: `gmeasure-text` / `gletter-spacing` / `gword-spacing` / `gfont-kerning` /
+    `gfont-stretch` / `gfont-variant` / `gtext-rendering`
+  - ピクセル・その他: `gpixel` / `gset-pixel` / `gclear-rect` / `greset` / `gwidth` / `gheight`
+- `gfill-text` / `gstroke-text` に第4引数 `maxWidth` を追加（#31）
+- 値を返す関数（`gwidth` / `gheight` / `gmeasure-text` / `gpixel` /
+  `gis-point-in-path` / `gis-point-in-stroke`）の戻り値規約を docs に明文化（#31）
+- `gtext-baseline` / `gtext-direction` を正式名として追加（#32）
+- `GraphicsPlugin.functionNames()` — 登録済み Lisp 関数名の一覧を返す static メソッドを追加（#32）
+
+- `docs/non-goals.md` — 意図的に対応しない事項（プラグイン層の性能最適化・
+  ImageData 一括転送・DOM 結合 API・非同期描画・mutation testing・
+  ドキュメント多言語化・プロダクションサポート）とその理由を明文化（#37）
+
+- README に描画例のスクリーンショット（`pnpm screenshot` で再生成可能）と
+  サポート環境マトリクス（ブラウザ / OffscreenCanvas / Node.js）を追加（#36）
+- GitHub Pages へライブデモ（examples）と TypeDoc を自動デプロイする
+  ワークフローを追加し、README からリンク（#36）
+- docs/graphics.md に使用例（グラデーション・変形・値を返す関数・保存）を追加（#36）
+- CI・リポジトリ運用を強化（#35）
+  - CodeQL（code scanning）ワークフローを追加
+  - actionlint によるワークフロー自体の検証ジョブを追加
+  - knip による未使用 export / 未使用依存の検出（`check:knip`）を追加
+  - TypeDoc を警告ゼロ強制（`--treatWarningsAsErrors`）で CI 実行
+  - GitHub Release のノートを CHANGELOG の該当セクションから生成
+    （自動生成の PR リストは末尾に付記）
+  - CHANGELOG に compare リンクを追加
+  - `.editorconfig` を追加
+  - リポジトリ設定で secret scanning / push protection を有効化
+
+- カバレッジ補完（例外パス・save 系の全経路）とカバレッジ閾値
+  （statements 94 / branches 90 / functions 100 / lines 98）を導入（#34）
+- publint / @arethetypeswrong/cli による ESM・CJS dual パッケージングの
+  機械検証を `pnpm check`（`check:package`）に追加（#34）
+- Playwright + 実 Chromium の E2E（`pnpm e2e`）を追加。examples を Vite で
+  ビルド・配信し、Lisp プログラムが描画したピクセル値を直接アサートする。
+  CI に専用ジョブを追加（#34）
+- @napi-rs/canvas による Node.js 統合テストを追加。実 Canvas 実装で
+  `(gsave-png path)` の PNG 出力・`gpixel` / `gset-pixel` の描画結果・
+  `gmeasure-text` を検証（モジュールが使えない環境では skip）（#34）
+- examples が素のブラウザで動かなかった問題を修正
+  （kei-lisp がモジュールスコープで import する node:module / node:vm /
+  node:v8 に対する Vite 用シムを examples に追加）（#34）
+
+### Deprecated
+
+- `gtext-line` / `gtext-dire` — `gtext-baseline` / `gtext-direction` の
+  deprecated エイリアスに変更（動作は継続。将来のメジャーで削除予定、#32）
+
+### Changed
+
+- **Breaking:** `gpattern` の第2引数を数値フラグから Canvas API と同じ文字列
+  （`"repeat"` / `"repeat-x"` / `"repeat-y"` / `"no-repeat"`）に変更。
+  ドキュメントは以前から文字列と記載しており、実装を追従（#32）
+- **Breaking (TypeScript API):** ディスパッチテーブルを非公開化
+  （public static だった `buildInFunctions`（typo・mutable）と `setup` /
+  `selectProcedure` / `buildInFunction` を削除し、`apply` 内部に統合。
+  一覧が必要な場合は新設の `functionNames()` を使用）（#32）
+- 列挙文字列を受け取る全関数（`gline-cap` / `gline-join` / `gtext-align` /
+  `gtext-baseline` / `gtext-direction` / `gcomposite` / `gfont-*` /
+  `gtext-rendering` / `gpattern` の repetition）で許容値リストによる検証を導入。
+  不正値は期待値を示す診断メッセージ + `nil` を返す（#32）
+- `GraphicsPlugin` の無意味な `extends Object` を削除（#32）
+
+### Fixed
+
+- `gpattern`: `createPattern()` が null を返した場合に型キャストで握りつぶしていた
+  レガシーバグを修正し、診断メッセージを出力するように変更（#33）
+- `#print` が `process.stderr` の無い素のブラウザで例外になっていたのを、
+  `console.error` へのフォールバックで解消。shim なしでも動作する（#33）
+- `gimage` / `gpattern` にロード済み画像のキャッシュを導入。同一 `src` の
+  2回目以降の描画は同期実行され、描画順が保たれる。ロード失敗時は診断を出力（#33）
+- `gclear` に任意色の指定を追加（引数なしは従来どおり白）。また実行後に
+  `fillStyle` を黒へ強制リセットしていたのをやめ、直前の値を復元するように変更（#33）
+- `gsleep` が busy-wait でスレッドをブロックする旨を docs に明記（#33）
+
 ## [2.0.0] - 2026-07-04
 
 ### Added
@@ -122,3 +207,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   canvas is not open. The JavaScript source emitted the wrong message
   (`'The canvas has already been opened.'`) due to a copy-paste from
   `gOpen`'s double-open guard.
+
+[unreleased]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v2.0.0...v3.0.0
+[2.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.1.0...v2.0.0
+[1.1.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/releases/tag/v1.0.0

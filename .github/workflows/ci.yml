@@ -62,6 +62,55 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:coverage
 
+  actionlint:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker://rhysd/actionlint:1.7.10
+        with:
+          args: -color
+
+  docs:
+    name: TypeDoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm doc --treatWarningsAsErrors
+
+  knip:
+    name: Unused code / deps (knip)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec knip
+
+  e2e:
+    name: E2E (Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e
+
   build:
     name: Build (Node ${{ matrix.node }})
     runs-on: ubuntu-latest

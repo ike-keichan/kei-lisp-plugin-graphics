@@ -4,7 +4,7 @@
  * text, and transforms, plus a `gsave-png` download button.
  *
  * Run with:
- *   pnpm build && pnpm dlx vite examples
+ *   pnpm build && pnpm exec vite examples
  * then open the printed URL (default http://localhost:5173) in a browser.
  */
 import { LispInterpreter } from 'kei-lisp';

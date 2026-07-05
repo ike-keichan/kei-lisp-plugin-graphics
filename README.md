@@ -19,9 +19,14 @@ interpreter. Register it on a `LispInterpreter` and call drawing primitives
 > are welcome, but external pull requests are generally **not accepted** —
 > see [CONTRIBUTING.md](./CONTRIBUTING.md).
 
+![Shapes and text drawn from Lisp source with kei-lisp-plugin-graphics](./docs/assets/basic-drawing.png)
+
+_The canvas above is painted entirely from Lisp source — try it in the
+[**live demo**](https://ike-keichan.github.io/kei-lisp-plugin-graphics/)._
+
 ## Features
 
-- 45 Canvas2D drawing primitives (`g…` symbols) callable directly from Lisp source
+- 75 Canvas2D drawing primitives (`g…` symbols) callable directly from Lisp source
 - Works with `HTMLCanvasElement` and `OffscreenCanvas`
 - ESM and CommonJS dual output with TypeScript types
 - Zero runtime dependencies
@@ -77,25 +82,38 @@ canvas's 2D rendering context.
 
 ## Provided Lisp functions
 
-| Category       | Symbols                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Lifecycle      | `gopen`, `gclose`, `gclear`, `gsleep`                                                                              |
-| Path           | `gstart-path`, `gfinish-path`, `gmove-to`, `gline-to`, `gquadcurve-to`, `gbezcurve-to`, `garc`, `garc-to`, `grect` |
-| Fill / stroke  | `gfill`, `gstroke`, `gfill-rect`, `gstroke-rect`, `gfill-tri`, `gstroke-tri`, `gfill-text`, `gstroke-text`         |
-| Style          | `gcolor`, `gfill-color`, `gstroke-color`, `gline-width`, `gline-cap`, `gline-join`, `galpha`, `gpattern`           |
-| Shadow         | `gshadow-color`, `gshadow-blur`, `gshadow-offsetx`, `gshadow-offsety`                                              |
-| Text           | `gtext-font`, `gtext-align`, `gtext-line`, `gtext-dire`                                                            |
-| Transform      | `gtranslate`, `gscale`, `grotate`                                                                                  |
-| State          | `gsave`, `grestore`                                                                                                |
-| Image / export | `gimage`, `gsave-png`, `gsave-jpeg`                                                                                |
+| Category       | Symbols                                                                                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lifecycle      | `gopen`, `gclose`, `gclear`, `greset`, `gwidth`, `gheight`, `gsleep`                                                                                                                                                                                                |
+| Path           | `gstart-path`, `gfinish-path`, `gmove-to`, `gline-to`, `gquadcurve-to`, `gbezcurve-to`, `garc`, `garc-to`, `grect`, `ground-rect`, `gellipse`, `gclip`, `gis-point-in-path`, `gis-point-in-stroke`                                                                  |
+| Fill / stroke  | `gfill`, `gstroke`, `gfill-rect`, `gstroke-rect`, `gfill-tri`, `gstroke-tri`, `gfill-text`, `gstroke-text`                                                                                                                                                          |
+| Style          | `gcolor`, `gfill-color`, `gstroke-color`, `gline-width`, `gline-cap`, `gline-join`, `gline-dash`, `gline-dash-offset`, `gmiter-limit`, `galpha`, `gpattern`, `gcomposite`, `gfilter`, `gimage-smoothing`, `glinear-gradient`, `gradial-gradient`, `gconic-gradient` |
+| Shadow         | `gshadow-color`, `gshadow-blur`, `gshadow-offsetx`, `gshadow-offsety`                                                                                                                                                                                               |
+| Text           | `gtext-font`, `gtext-align`, `gtext-baseline`, `gtext-direction`, `gmeasure-text`, `gletter-spacing`, `gword-spacing`, `gfont-kerning`, `gfont-stretch`, `gfont-variant`, `gtext-rendering`                                                                         |
+| Transform      | `gtranslate`, `gscale`, `grotate`, `gtransform`, `gset-transform`, `greset-transform`                                                                                                                                                                               |
+| State          | `gsave`, `grestore`                                                                                                                                                                                                                                                 |
+| Image / export | `gimage`, `gsave-png`, `gsave-jpeg`, `gclear-rect`, `gpixel`, `gset-pixel`                                                                                                                                                                                          |
 
 Each function returns `t` on success. See [`docs/graphics.md`](./docs/graphics.md)
 for argument signatures and side effects.
 
+## Environment support
+
+| Capability                            | Browser (`HTMLCanvasElement`)                            | `OffscreenCanvas` (worker) | Node.js (e.g. `@napi-rs/canvas`) |
+| ------------------------------------- | -------------------------------------------------------- | -------------------------- | -------------------------------- |
+| Drawing primitives (`g…`)             | ✅                                                       | ✅                         | ✅                               |
+| `gimage` / `gpattern` (image loading) | ✅                                                       | ⚠️ needs a global `Image`  | ❌ returns `nil`                 |
+| `gsave-png` / `gsave-jpeg` (download) | ✅                                                       | ❌ returns `nil`           | ❌ returns `nil`                 |
+| `gsave-png` / `gsave-jpeg` (`path`)   | ❌ returns `nil`                                         | ⚠️ async `convertToBlob`   | ✅                               |
+| Diagnostics                           | `console.error` (or host-provided `process.stderr` shim) | same                       | `process.stderr`                 |
+
 ## Reference
 
+- [Live demo](https://ike-keichan.github.io/kei-lisp-plugin-graphics/) — the examples, served from GitHub Pages
+- [API docs (TypeDoc)](https://ike-keichan.github.io/kei-lisp-plugin-graphics/api/) — generated API documentation
 - [API Reference](./docs/api.md) — TypeScript / JavaScript API
 - [Graphics Reference](./docs/graphics.md) — every `g…` Lisp function
+- [Non-goals](./docs/non-goals.md) — what this project deliberately does not do
 - [kei-lisp Plugin Guide](https://github.com/ike-keichan/kei-lisp/blob/main/docs/plugins.md) — how plugins integrate with the interpreter
 
 ## Development
