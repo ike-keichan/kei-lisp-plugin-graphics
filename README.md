@@ -21,8 +21,11 @@ interpreter. Register it on a `LispInterpreter` and call drawing primitives
 
 ![Shapes and text drawn from Lisp source with kei-lisp-plugin-graphics](./docs/assets/basic-drawing.png)
 
-_The canvas above is painted entirely from Lisp source — try it in the
-[**live demo**](https://ike-keichan.github.io/kei-lisp-plugin-graphics/)._
+_The canvas above is painted entirely from Lisp source. You can see this
+program rendered in the
+[**example page**](https://ike-keichan.github.io/kei-lisp-plugin-graphics/).
+To write and run kei-lisp yourself, use
+[**kei-lisp-web**](https://ike-keichan.github.io/kei-lisp-web/)._
 
 ## Features
 
@@ -109,7 +112,8 @@ for argument signatures and side effects.
 
 ## Reference
 
-- [Live demo](https://ike-keichan.github.io/kei-lisp-plugin-graphics/) — the examples, served from GitHub Pages
+- [Example page](https://ike-keichan.github.io/kei-lisp-plugin-graphics/) — the examples rendered on GitHub Pages
+- [kei-lisp-web](https://ike-keichan.github.io/kei-lisp-web/) — interactive kei-lisp playground
 - [API docs (TypeDoc)](https://ike-keichan.github.io/kei-lisp-plugin-graphics/api/) — generated API documentation
 - [API Reference](./docs/api.md) — TypeScript / JavaScript API
 - [Graphics Reference](./docs/graphics.md) — every `g…` Lisp function
