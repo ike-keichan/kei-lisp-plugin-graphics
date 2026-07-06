@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING: failures signal evaluation errors instead of printing to
+  stderr and returning `nil`** (kei-lisp roadmap follow-up, #21). Every
+  synchronous failure — wrong arity, type mismatch, canvas not open /
+  already open, unsupported canvas, canvas-level exceptions, save failures —
+  now throws a kei-lisp `EvalError` carrying the same message that used to
+  be printed. Lisp callers intercept it with
+  `(handler-case … (eval-error (e) …))` (kei-lisp >= 3 condition system);
+  unhandled errors abort evaluation and reach library callers as an
+  `EvalError`. Diagnostics from asynchronous work (image loading,
+  `OffscreenCanvas` file writes) and `gopen`'s informational size line still
+  go to `process.stderr`, and `selectColor`'s best-effort black fallback is
+  unchanged.
+- **BREAKING (TypeScript API): `checkSupport()` was removed.** The
+  null-context check is folded into the private guard that every `g…`
+  method runs; an unusable canvas now signals an `EvalError` ("Unable to
+  initialize canvas. …") instead of printing and returning `nil`.
+- A failed `gopen` (the initial clear threw) no longer leaves the canvas
+  marked open, so a later `gopen` can retry.
+- The `g…` handlers now share one guard-and-dispatch skeleton (`#execute`),
+  replacing the per-method legacy Graphist argument destructuring; behavior
+  is unchanged apart from the error signaling described above.
 - **BREAKING: requires kei-lisp >= 3.** The `kei-lisp` peer dependency was
   bumped from `^2.2.0` to `^3.0.0` to adopt the v3 numeric tower, whose
   integers (`bigint`) and exact rationals (`Rational`) flow into plugin

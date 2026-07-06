@@ -104,8 +104,10 @@ canvas's 2D rendering context.
 | State          | `gsave`, `grestore`                                                                                                                                                                                                                                                 |
 | Image / export | `gimage`, `gsave-png`, `gsave-jpeg`, `gclear-rect`, `gpixel`, `gset-pixel`                                                                                                                                                                                          |
 
-Each function returns `t` on success. See [`docs/graphics.md`](./docs/graphics.md)
-for argument signatures and side effects.
+Each function returns `t` on success; failures signal an evaluation error
+that Lisp code can intercept with `(handler-case … (eval-error (e) …))`.
+See [`docs/graphics.md`](./docs/graphics.md) for argument signatures and
+side effects.
 
 ## Environment support
 

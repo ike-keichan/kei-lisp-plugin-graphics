@@ -1,11 +1,22 @@
 # Graphics Reference
 
 All `g…` Lisp functions exposed by `kei-lisp-plugin-graphics`. Each function
-returns the symbol `t` on success and `nil` on failure (wrong arity, type
-mismatch, or canvas not open) — except the value-returning functions
+returns the symbol `t` on success — except the value-returning functions
 (`gwidth`, `gheight`, `gmeasure-text`, `gpixel`, `gis-point-in-path`,
-`gis-point-in-stroke`), which return their documented value on success and
-`nil` on failure.
+`gis-point-in-stroke`), which return their documented value.
+
+Failures (wrong arity, type mismatch, canvas not open, canvas-level errors)
+signal an **evaluation error** that Lisp callers can intercept with
+`handler-case`; the clause variable is bound to the error message:
+
+```lisp
+(handler-case (gfill-rect 10)
+  (eval-error (e) e))            ; => "Can not draw fill rectangle."
+```
+
+An unhandled error aborts evaluation and is reported at the interpreter
+boundary (the REPL prints it; library callers catch it as a kei-lisp
+`EvalError`).
 
 Numeric arguments accept any kei-lisp v3 number — integer, float, or exact
 rational (e.g. the result of `(/ 5 2)`) — and are converted to floats before
@@ -17,9 +28,14 @@ Enum-string setters (`gline-cap`, `gline-join`, `gtext-align`,
 `gtext-baseline`, `gtext-direction`, `gcomposite`, `gfont-kerning`,
 `gfont-stretch`, `gfont-variant`, `gtext-rendering`, `gimage-smoothing`, and
 `gpattern`'s repetition) validate their argument against the Canvas API's
-allowed values and return `nil` with a diagnostic for anything else.
-Diagnostics are written to `process.stderr` (kei-lisp convention); browser
-hosts typically redirect this to their output panel.
+allowed values and signal an error listing the expected values for anything
+else.
+
+Only diagnostics from asynchronous work — image loading (`gimage` /
+`gpattern`) and `OffscreenCanvas` file writes, which fail after the call has
+already returned — plus `gopen`'s informational size line still go to
+`process.stderr` (kei-lisp convention); browser hosts typically redirect
+this to their output panel.
 
 ## Lifecycle
 
