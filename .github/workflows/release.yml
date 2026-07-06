@@ -22,7 +22,7 @@ jobs:
       should-release: ${{ steps.decide.outputs.should-release }}
       version: ${{ steps.decide.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0 # tags must be available for the existence check
 
@@ -45,13 +45,13 @@ jobs:
     if: needs.check.outputs.should-release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version-file: .node-version
           cache: 'pnpm'
@@ -100,7 +100,10 @@ jobs:
       - name: Extract release notes from CHANGELOG
         run: |
           version="${{ needs.check.outputs.version }}"
-          awk -v ver="$version" '
+          # Escape regex-special characters (notably the dots in 1.2.3) so
+          # the section header matches literally, not as a wildcard pattern.
+          escaped=$(printf '%s' "$version" | sed 's/[.[\*^$]/\\&/g')
+          awk -v ver="$escaped" '
             $0 ~ ("^## \\[" ver "\\]") { flag = 1; next }
             /^## \[/ { if (flag) exit }
             flag { print }
