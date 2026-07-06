@@ -7,7 +7,7 @@
 // repeated diagnostic strings) without per-line escape hatches.
 
 import type { KeiLispPlugin, LispValue, PluginContext } from 'kei-lisp';
-import { Cons, InterpretedSymbol } from 'kei-lisp';
+import { Cons, InterpretedSymbol, Numeric } from 'kei-lisp';
 
 // Allowed values for the enum-string setters, mirroring the Canvas 2D API
 // types. Invalid values are rejected with a diagnostic instead of being
@@ -319,7 +319,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   /**
-   * Reads exactly `count` numbers from the argument list.
+   * Reads exactly `count` numbers from the argument list. kei-lisp v3
+   * evaluates integers to `bigint` and exact division to `Rational`, so each
+   * value is converted to a JS float for the Canvas 2D API.
    * @param arguments_ - the evaluated argument list
    * @param count - the expected argument count
    * @return the numbers, or `null` on wrong arity or a non-number argument
@@ -330,7 +332,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
     let rest = arguments_;
     for (let index = 0; index < count; index++) {
       if (!Cons.isNumber(rest.car)) return null;
-      values.push(rest.car);
+      values.push(Numeric.toFloat(rest.car));
       rest = rest.cdr as Cons;
     }
     return values;
@@ -378,7 +380,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
       const offset = stops[index];
       const color = stops[index + 1];
       if (!Cons.isNumber(offset) || !Cons.isString(color)) return false;
-      gradient.addColorStop(offset, color);
+      gradient.addColorStop(Numeric.toFloat(offset), color);
     }
     return true;
   }
@@ -521,7 +523,8 @@ export class GraphicsPlugin implements KeiLispPlugin {
     if (this.isOpen) {
       try {
         if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-          const aNumber = arguments_.car <= 0 ? 0 : arguments_.car >= 1 ? 1 : arguments_.car;
+          const aFloat = Numeric.toFloat(arguments_.car);
+          const aNumber = aFloat <= 0 ? 0 : aFloat >= 1 ? 1 : aFloat;
           this.ctx.globalAlpha = aNumber;
           return InterpretedSymbol.of('t');
         }
@@ -560,8 +563,15 @@ export class GraphicsPlugin implements KeiLispPlugin {
             Cons.isNumber(a4) &&
             Cons.isNumber(a5)
           ) {
-            const isAFlag = a5 >= 0;
-            this.ctx.arc(a0, a1, a2, (Math.PI / 180) * a3, (Math.PI / 180) * a4, isAFlag);
+            const isAFlag = Numeric.toFloat(a5) >= 0;
+            this.ctx.arc(
+              Numeric.toFloat(a0),
+              Numeric.toFloat(a1),
+              Numeric.toFloat(a2),
+              (Math.PI / 180) * Numeric.toFloat(a3),
+              (Math.PI / 180) * Numeric.toFloat(a4),
+              isAFlag,
+            );
             return InterpretedSymbol.of('t');
           }
         }
@@ -597,7 +607,13 @@ export class GraphicsPlugin implements KeiLispPlugin {
             Cons.isNumber(a3) &&
             Cons.isNumber(a4)
           ) {
-            this.ctx.arcTo(a0, a1, a2, a3, a4);
+            this.ctx.arcTo(
+              Numeric.toFloat(a0),
+              Numeric.toFloat(a1),
+              Numeric.toFloat(a2),
+              Numeric.toFloat(a3),
+              Numeric.toFloat(a4),
+            );
             return InterpretedSymbol.of('t');
           }
         }
@@ -636,7 +652,14 @@ export class GraphicsPlugin implements KeiLispPlugin {
             Cons.isNumber(a4) &&
             Cons.isNumber(a5)
           ) {
-            this.ctx.bezierCurveTo(a0, a1, a2, a3, a4, a5);
+            this.ctx.bezierCurveTo(
+              Numeric.toFloat(a0),
+              Numeric.toFloat(a1),
+              Numeric.toFloat(a2),
+              Numeric.toFloat(a3),
+              Numeric.toFloat(a4),
+              Numeric.toFloat(a5),
+            );
             return InterpretedSymbol.of('t');
           }
         }
@@ -747,7 +770,12 @@ export class GraphicsPlugin implements KeiLispPlugin {
           const cdr3 = cdr2.cdr as Cons;
           const a3 = cdr3.car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.fillRect(a0, a1, a2, a3);
+            this.ctx.fillRect(
+              Numeric.toFloat(a0),
+              Numeric.toFloat(a1),
+              Numeric.toFloat(a2),
+              Numeric.toFloat(a3),
+            );
             return InterpretedSymbol.of('t');
           }
         }
@@ -770,9 +798,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
       if (!Cons.isString(a0) || !Cons.isNumber(a1) || !Cons.isNumber(a2)) return null;
       if (length_ === 4) {
         if (!Cons.isNumber(a3)) return null;
-        context.fillText(a0, a1, a2, a3);
+        context.fillText(a0, Numeric.toFloat(a1), Numeric.toFloat(a2), Numeric.toFloat(a3));
       } else {
-        context.fillText(a0, a1, a2);
+        context.fillText(a0, Numeric.toFloat(a1), Numeric.toFloat(a2));
       }
       return InterpretedSymbol.of('t');
     });
@@ -803,9 +831,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
             Cons.isNumber(a5)
           ) {
             this.ctx.beginPath();
-            this.ctx.moveTo(a0, a1);
-            this.ctx.lineTo(a2, a3);
-            this.ctx.lineTo(a4, a5);
+            this.ctx.moveTo(Numeric.toFloat(a0), Numeric.toFloat(a1));
+            this.ctx.lineTo(Numeric.toFloat(a2), Numeric.toFloat(a3));
+            this.ctx.lineTo(Numeric.toFloat(a4), Numeric.toFloat(a5));
             this.ctx.fill();
             return InterpretedSymbol.of('t');
           }
@@ -845,11 +873,17 @@ export class GraphicsPlugin implements KeiLispPlugin {
       if (length_ === 5) {
         if (!Cons.isNumber(a3) || !Cons.isNumber(a4)) return null;
         this.#withImage(a0, (image) => {
-          context.drawImage(image, a1, a2, a3, a4);
+          context.drawImage(
+            image,
+            Numeric.toFloat(a1),
+            Numeric.toFloat(a2),
+            Numeric.toFloat(a3),
+            Numeric.toFloat(a4),
+          );
         });
       } else {
         this.#withImage(a0, (image) => {
-          context.drawImage(image, a1, a2);
+          context.drawImage(image, Numeric.toFloat(a1), Numeric.toFloat(a2));
         });
       }
       return InterpretedSymbol.of('t');
@@ -864,7 +898,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
           const a0 = arguments_.car;
           const a1 = (arguments_.cdr as Cons).car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.lineTo(a0, a1);
+            this.ctx.lineTo(Numeric.toFloat(a0), Numeric.toFloat(a1));
             return InterpretedSymbol.of('t');
           }
         }
@@ -908,7 +942,8 @@ export class GraphicsPlugin implements KeiLispPlugin {
     if (this.isOpen) {
       try {
         if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-          const aNumber = arguments_.car <= 0 ? 1 : arguments_.car;
+          const aFloat = Numeric.toFloat(arguments_.car);
+          const aNumber = aFloat <= 0 ? 1 : aFloat;
           this.ctx.lineWidth = aNumber;
           return InterpretedSymbol.of('t');
         }
@@ -931,7 +966,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
           const a0 = arguments_.car;
           const a1 = (arguments_.cdr as Cons).car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.moveTo(a0, a1);
+            this.ctx.moveTo(Numeric.toFloat(a0), Numeric.toFloat(a1));
             return InterpretedSymbol.of('t');
           }
         }
@@ -998,7 +1033,12 @@ export class GraphicsPlugin implements KeiLispPlugin {
           const cdr3 = cdr2.cdr as Cons;
           const a3 = cdr3.car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.quadraticCurveTo(a0, a1, a2, a3);
+            this.ctx.quadraticCurveTo(
+              Numeric.toFloat(a0),
+              Numeric.toFloat(a1),
+              Numeric.toFloat(a2),
+              Numeric.toFloat(a3),
+            );
             return InterpretedSymbol.of('t');
           }
         }
@@ -1055,7 +1095,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
           const a0 = arguments_.car;
           const a1 = (arguments_.cdr as Cons).car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.scale(a0, a1);
+            this.ctx.scale(Numeric.toFloat(a0), Numeric.toFloat(a1));
             return InterpretedSymbol.of('t');
           }
         }
@@ -1074,7 +1114,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {
       if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-        this.ctx.shadowBlur = arguments_.car;
+        this.ctx.shadowBlur = Numeric.toFloat(arguments_.car);
         return InterpretedSymbol.of('t');
       }
       this.#print('Can not set shadow blur.');
@@ -1110,7 +1150,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {
       if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-        this.ctx.shadowOffsetX = arguments_.car;
+        this.ctx.shadowOffsetX = Numeric.toFloat(arguments_.car);
         return InterpretedSymbol.of('t');
       }
       this.#print('Can not set shadow offsetX.');
@@ -1124,7 +1164,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
     if (!this.checkSupport()) return Cons.nil;
     if (this.isOpen) {
       if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-        this.ctx.shadowOffsetY = arguments_.car;
+        this.ctx.shadowOffsetY = Numeric.toFloat(arguments_.car);
         return InterpretedSymbol.of('t');
       }
       this.#print('Can not set shadow offsetY.');
@@ -1144,7 +1184,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
         }
       };
       if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-        sleep(arguments_.car);
+        sleep(Numeric.toFloat(arguments_.car));
         return InterpretedSymbol.of('t');
       }
       this.#print('Can not sleep');
@@ -1217,7 +1257,12 @@ export class GraphicsPlugin implements KeiLispPlugin {
           const cdr3 = cdr2.cdr as Cons;
           const a3 = cdr3.car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.strokeRect(a0, a1, a2, a3);
+            this.ctx.strokeRect(
+              Numeric.toFloat(a0),
+              Numeric.toFloat(a1),
+              Numeric.toFloat(a2),
+              Numeric.toFloat(a3),
+            );
             return InterpretedSymbol.of('t');
           }
         }
@@ -1240,9 +1285,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
       if (!Cons.isString(a0) || !Cons.isNumber(a1) || !Cons.isNumber(a2)) return null;
       if (length_ === 4) {
         if (!Cons.isNumber(a3)) return null;
-        context.strokeText(a0, a1, a2, a3);
+        context.strokeText(a0, Numeric.toFloat(a1), Numeric.toFloat(a2), Numeric.toFloat(a3));
       } else {
-        context.strokeText(a0, a1, a2);
+        context.strokeText(a0, Numeric.toFloat(a1), Numeric.toFloat(a2));
       }
       return InterpretedSymbol.of('t');
     });
@@ -1273,9 +1318,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
             Cons.isNumber(a5)
           ) {
             this.ctx.beginPath();
-            this.ctx.moveTo(a0, a1);
-            this.ctx.lineTo(a2, a3);
-            this.ctx.lineTo(a4, a5);
+            this.ctx.moveTo(Numeric.toFloat(a0), Numeric.toFloat(a1));
+            this.ctx.lineTo(Numeric.toFloat(a2), Numeric.toFloat(a3));
+            this.ctx.lineTo(Numeric.toFloat(a4), Numeric.toFloat(a5));
             this.ctx.closePath();
             this.ctx.stroke();
             return InterpretedSymbol.of('t');
@@ -1355,7 +1400,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
           const a0 = arguments_.car;
           const a1 = (arguments_.cdr as Cons).car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.translate(a0, a1);
+            this.ctx.translate(Numeric.toFloat(a0), Numeric.toFloat(a1));
             return InterpretedSymbol.of('t');
           }
         }
@@ -1383,7 +1428,12 @@ export class GraphicsPlugin implements KeiLispPlugin {
           const cdr3 = cdr2.cdr as Cons;
           const a3 = cdr3.car;
           if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.rect(a0, a1, a2, a3);
+            this.ctx.rect(
+              Numeric.toFloat(a0),
+              Numeric.toFloat(a1),
+              Numeric.toFloat(a2),
+              Numeric.toFloat(a3),
+            );
             return InterpretedSymbol.of('t');
           }
         }
@@ -1403,7 +1453,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
     if (this.isOpen) {
       try {
         if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-          this.ctx.rotate((Math.PI / 180) * arguments_.car);
+          this.ctx.rotate((Math.PI / 180) * Numeric.toFloat(arguments_.car));
           return InterpretedSymbol.of('t');
         }
         this.#print('Can not rotate.');
@@ -1685,12 +1735,14 @@ export class GraphicsPlugin implements KeiLispPlugin {
     });
   }
 
+  // gWidth / gHeight / gPixel return bigint so their integer results are
+  // kei-lisp v3 integers (exact, `integerp` → t) rather than floats.
   gWidth(): LispValue {
-    return this.#execute('Can not get width.', () => this.canvas.width);
+    return this.#execute('Can not get width.', () => BigInt(this.canvas.width));
   }
 
   gHeight(): LispValue {
-    return this.#execute('Can not get height.', () => this.canvas.height);
+    return this.#execute('Can not get height.', () => BigInt(this.canvas.height));
   }
 
   gPixel(arguments_: Cons): LispValue {
@@ -1698,7 +1750,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
       const a = this.#numbers(arguments_, 2);
       if (a === null) return null;
       const data = context.getImageData(a[0], a[1], 1, 1).data;
-      return this.#toList([data[0], data[1], data[2], data[3]]);
+      return this.#toList([BigInt(data[0]), BigInt(data[1]), BigInt(data[2]), BigInt(data[3])]);
     });
   }
 
@@ -1728,7 +1780,16 @@ export class GraphicsPlugin implements KeiLispPlugin {
       ) {
         return null;
       }
-      return this.#installGradient(context, context.createLinearGradient(x0, y0, x1, y1), stops);
+      return this.#installGradient(
+        context,
+        context.createLinearGradient(
+          Numeric.toFloat(x0),
+          Numeric.toFloat(y0),
+          Numeric.toFloat(x1),
+          Numeric.toFloat(y1),
+        ),
+        stops,
+      );
     });
   }
 
@@ -1748,7 +1809,14 @@ export class GraphicsPlugin implements KeiLispPlugin {
       }
       return this.#installGradient(
         context,
-        context.createRadialGradient(x0, y0, r0, x1, y1, r1),
+        context.createRadialGradient(
+          Numeric.toFloat(x0),
+          Numeric.toFloat(y0),
+          Numeric.toFloat(r0),
+          Numeric.toFloat(x1),
+          Numeric.toFloat(y1),
+          Numeric.toFloat(r1),
+        ),
         stops,
       );
     });
@@ -1762,7 +1830,11 @@ export class GraphicsPlugin implements KeiLispPlugin {
       }
       return this.#installGradient(
         context,
-        context.createConicGradient((Math.PI / 180) * angle, x, y),
+        context.createConicGradient(
+          (Math.PI / 180) * Numeric.toFloat(angle),
+          Numeric.toFloat(x),
+          Numeric.toFloat(y),
+        ),
         stops,
       );
     });
@@ -1787,7 +1859,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
       const cdr2 = cdr1.cdr as Cons;
       const a2 = cdr2.car;
       if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2)) {
-        aColor = `rgb(${a0}, ${a1}, ${a2})`;
+        aColor = `rgb(${Numeric.toFloat(a0)}, ${Numeric.toFloat(a1)}, ${Numeric.toFloat(a2)})`;
       } else {
         this.#print('Can not set color. set color "black".');
       }
@@ -1799,7 +1871,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
       const cdr3 = cdr2.cdr as Cons;
       const a3 = cdr3.car;
       if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-        aColor = `rgba(${a0}, ${a1}, ${a2}, ${a3})`;
+        aColor = `rgba(${Numeric.toFloat(a0)}, ${Numeric.toFloat(a1)}, ${Numeric.toFloat(a2)}, ${Numeric.toFloat(a3)})`;
       } else {
         this.#print('Can not set color. set color "black".');
       }

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: requires kei-lisp >= 3.** The `kei-lisp` peer dependency was
+  bumped from `^2.2.0` to `^3.0.0` to adopt the v3 numeric tower, whose
+  integers (`bigint`) and exact rationals (`Rational`) flow into plugin
+  arguments. All numeric arguments are now converted with `Numeric.toFloat`
+  before reaching the Canvas 2D API, so integer, float, and rational values
+  (e.g. `(gfill-rect (/ 5 2) 10 50 30)`) all draw correctly.
+- **`gwidth` / `gheight` / `gpixel` return exact integers.** Their
+  integer-valued results are now kei-lisp v3 integers (`bigint`), so
+  `(integerp (gwidth))` → `t` and `(/ (gwidth) 2)` stays exact.
+  `gmeasure-text` still returns a float.
+
 ## [3.0.1] - 2026-07-05
 
 ### Changed

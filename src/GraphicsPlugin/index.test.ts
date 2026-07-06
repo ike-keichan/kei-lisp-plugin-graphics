@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LispValue, PluginContext } from 'kei-lisp';
-import { Cons, InterpretedSymbol, LispInterpreter, StreamManager } from 'kei-lisp';
+import { Cons, InterpretedSymbol, LispInterpreter, Rational, StreamManager } from 'kei-lisp';
 
 import { createGraphicsPlugin } from '../index.js';
 import { GraphicsPlugin } from './index.js';
@@ -399,6 +399,19 @@ describe('GraphicsPlugin', () => {
       plugin.apply(InterpretedSymbol.of('gfill-rect'), arguments_(10, 20, 100, 50), makeContext());
       expect(spy).toHaveBeenCalledWith(10, 20, 100, 50);
     });
+
+    it('converts bigint and Rational arguments (v3 numeric tower) to floats', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'fillRect');
+      spy.mockClear();
+      plugin.apply(
+        InterpretedSymbol.of('gfill-rect'),
+        arguments_(10n, new Rational(41n, 2n), 100n, 50n),
+        makeContext(),
+      );
+      expect(spy).toHaveBeenCalledWith(10, 20.5, 100, 50);
+    });
   });
 
   describe('gFillText', () => {
@@ -520,6 +533,13 @@ describe('GraphicsPlugin', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       plugin.apply(InterpretedSymbol.of('galpha'), arguments_(5), makeContext());
+      expect((plugin.ctx as CanvasRenderingContext2D).globalAlpha).toBe(1);
+    });
+
+    it('clamps bigint arguments after conversion', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('galpha'), arguments_(5n), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).globalAlpha).toBe(1);
     });
   });
@@ -935,10 +955,10 @@ describe('GraphicsPlugin', () => {
       expect(ctx.reset).toHaveBeenCalledTimes(1);
     });
 
-    it('gwidth and gheight return the canvas dimensions', () => {
+    it('gwidth and gheight return the canvas dimensions as v3 integers (bigint)', () => {
       const { plugin } = openPlugin();
-      expect(call(plugin, 'gwidth')).toBe(800);
-      expect(call(plugin, 'gheight')).toBe(600);
+      expect(call(plugin, 'gwidth')).toBe(800n);
+      expect(call(plugin, 'gheight')).toBe(600n);
     });
 
     it('gpixel returns an (r g b a) list', () => {
@@ -1507,8 +1527,21 @@ describe('GraphicsPlugin', () => {
       expect(fillRect).toHaveBeenCalledWith(5, 10, 50, 30);
     });
 
+    it('accepts exact rationals from v3 division in Lisp source', () => {
+      interpreter.evalString('(gopen)');
+      fillRect.mockClear();
+      interpreter.evalString('(gfill-rect (/ 5 2) 10 50 30)');
+      expect(fillRect).toHaveBeenCalledWith(2.5, 10, 50, 30);
+    });
+
+    it('gwidth returns an exact integer under v3 (integerp → t)', () => {
+      interpreter.evalString('(gopen)');
+      expect(interpreter.evalString('(gwidth)')).toBe(200n);
+      expect(interpreter.evalString('(integerp (gwidth))')).toBe(InterpretedSymbol.of('t'));
+    });
+
     it('falls through to built-ins for non-g... symbols', () => {
-      expect(interpreter.evalString('(+ 1 2 3)')).toBe(6);
+      expect(interpreter.evalString('(+ 1 2 3)')).toBe(6n);
     });
   });
 });
