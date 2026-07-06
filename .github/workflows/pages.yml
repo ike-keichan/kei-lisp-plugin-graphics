@@ -29,6 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Deploy the commit whose Release run just succeeded; without this,
+          # a concurrent push to main could go live before its own Release
+          # finishes. Falls back to the branch head for workflow_dispatch.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:

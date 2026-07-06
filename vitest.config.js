@@ -11,7 +11,8 @@ export default defineConfig({
       reporter: ['text', 'html', 'lcov'],
       // Floors slightly below the measured values (2026-07: 98.4 / 95.8 /
       // 100 / 98.5) so regressions fail CI without making every small
-      // refactor fight the last percent.
+      // refactor fight the last percent; functions is deliberately pinned
+      // at 100 (every function must keep at least one test).
       thresholds: {
         statements: 94,
         branches: 90,

@@ -19,11 +19,13 @@ An unhandled error aborts evaluation and is reported at the interpreter
 boundary (the REPL prints it; library callers catch it as a kei-lisp
 `EvalError`). One deliberate exception: the color-taking functions
 (`gcolor`, `gfill-color`, `gstroke-color`, `gshadow-color`, `gclear`)
-parse their color best-effort — a malformed color _shape_ (wrong number
-of components, or non-numbers in an RGB/RGBA tuple) prints a diagnostic
-and falls back to `"black"` instead of signaling, and a color _string_
-is passed to the canvas as-is (the canvas silently ignores invalid
-strings and keeps the previous color).
+parse their color best-effort. Given at least one argument, a malformed
+color _shape_ (an unsupported component count, or non-numbers in an
+RGB/RGBA tuple) prints a diagnostic and falls back to `"black"` instead
+of signaling, and a color _string_ is passed to the canvas as-is (the
+canvas silently ignores invalid strings and keeps the previous color).
+Calling them with no arguments signals as usual — except `gclear`,
+whose no-argument form paints the canvas white.
 
 Numeric arguments accept any kei-lisp v3 number — integer, float, or exact
 rational (e.g. the result of `(/ 5 2)`) — and are converted to floats before
@@ -112,12 +114,12 @@ browser hosts typically redirect this to their output panel.
 
 ## Shadow
 
-| Function          | Arguments       | Description            |
-| ----------------- | --------------- | ---------------------- |
-| `gshadow-color`   | `color: string` | Set shadow color       |
-| `gshadow-blur`    | `blur: number`  | Set shadow blur radius |
-| `gshadow-offsetx` | `x: number`     | Set shadow X offset    |
-| `gshadow-offsety` | `y: number`     | Set shadow Y offset    |
+| Function          | Arguments                                 | Description                            |
+| ----------------- | ----------------------------------------- | -------------------------------------- |
+| `gshadow-color`   | `color: string` or `r, g, b[, a]: number` | Set shadow color (string / RGB / RGBA) |
+| `gshadow-blur`    | `blur: number`                            | Set shadow blur radius                 |
+| `gshadow-offsetx` | `x: number`                               | Set shadow X offset                    |
+| `gshadow-offsety` | `y: number`                               | Set shadow Y offset                    |
 
 ## Text
 

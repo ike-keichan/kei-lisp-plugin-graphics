@@ -73,6 +73,9 @@ jobs:
       # Both steps below are idempotent so that a partially failed run can be
       # recovered with "Re-run failed jobs" (e.g. the publish succeeded but
       # the tag push failed) instead of hard-failing on the duplicate.
+      # npm view exits non-zero (E404) for a missing version on npm >= 8.13,
+      # which .node-version guarantees here; a transient registry failure
+      # falls through to publish, where the registry rejects duplicates.
       - name: Publish to npm
         run: |
           version="${{ needs.check.outputs.version }}"
@@ -82,11 +85,13 @@ jobs:
             pnpm publish --provenance --access public --no-git-checks
           fi
 
+      # Checked against origin (ls-remote) because this job's shallow
+      # checkout does not fetch tags, so a local rev-parse can never see one.
       - name: Create and push tag
         run: |
           version="${{ needs.check.outputs.version }}"
-          if git rev-parse "v$version" >/dev/null 2>&1; then
-            echo "Tag v$version already exists — skipping."
+          if git ls-remote --exit-code origin "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "Tag v$version already exists on origin — skipping."
           else
             git tag "v$version"
             git push origin "v$version"

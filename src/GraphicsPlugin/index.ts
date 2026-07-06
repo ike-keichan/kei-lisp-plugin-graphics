@@ -584,11 +584,14 @@ export class GraphicsPlugin implements KeiLispPlugin {
     });
   }
 
-  gClose(): LispValue {
+  gClose(arguments_: Cons = Cons.nil): LispValue {
     if (this.ctx === null) {
       throw new EvalError(
         'Unable to initialize canvas. The browser or machine may not support it.',
       );
+    }
+    if (arguments_.length() !== 0) {
+      throw new EvalError('Can not close.');
     }
     if (!this.isOpen) {
       throw new EvalError('The canvas has already been closed.');
@@ -612,8 +615,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
     });
   }
 
-  gFill(): LispValue {
+  gFill(arguments_: Cons = Cons.nil): LispValue {
     return this.#execute('Can not fill.', (context) => {
+      if (arguments_.length() !== 0) return null;
       context.fill();
       return InterpretedSymbol.of('t');
     });
@@ -665,8 +669,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
     });
   }
 
-  gFinishPath(): LispValue {
+  gFinishPath(arguments_: Cons = Cons.nil): LispValue {
     return this.#execute('Can not finish path.', (context) => {
+      if (arguments_.length() !== 0) return null;
       context.closePath();
       return InterpretedSymbol.of('t');
     });
@@ -749,11 +754,14 @@ export class GraphicsPlugin implements KeiLispPlugin {
     });
   }
 
-  gOpen(): LispValue {
+  gOpen(arguments_: Cons = Cons.nil): LispValue {
     if (this.ctx === null) {
       throw new EvalError(
         'Unable to initialize canvas. The browser or machine may not support it.',
       );
+    }
+    if (arguments_.length() !== 0) {
+      throw new EvalError('Can not open.');
     }
     if (this.isOpen) {
       throw new EvalError('The canvas has already been opened.');
@@ -850,7 +858,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
 
   gShadowColor(arguments_: Cons): LispValue {
     return this.#execute('Can not set shadow color.', (context) => {
-      if (arguments_.length() !== 1) return null;
+      if (arguments_.length() < 1) return null;
       context.shadowColor = this.selectColor(arguments_);
       return InterpretedSymbol.of('t');
     });
@@ -886,15 +894,17 @@ export class GraphicsPlugin implements KeiLispPlugin {
     });
   }
 
-  gStartPath(): LispValue {
+  gStartPath(arguments_: Cons = Cons.nil): LispValue {
     return this.#execute('Can not start path.', (context) => {
+      if (arguments_.length() !== 0) return null;
       context.beginPath();
       return InterpretedSymbol.of('t');
     });
   }
 
-  gStroke(): LispValue {
+  gStroke(arguments_: Cons = Cons.nil): LispValue {
     return this.#execute('Can not stroke.', (context) => {
+      if (arguments_.length() !== 0) return null;
       context.stroke();
       return InterpretedSymbol.of('t');
     });
@@ -1026,8 +1036,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
    * unbounded.
    * @return `t` on success
    */
-  gSave(): LispValue {
+  gSave(arguments_: Cons = Cons.nil): LispValue {
     return this.#execute('Can not save.', (context) => {
+      if (arguments_.length() !== 0) return null;
       context.save();
       return InterpretedSymbol.of('t');
     });
@@ -1038,8 +1049,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
    * Pairs with `gSave`. Popping an empty stack is a no-op per the Canvas spec.
    * @return `t` on success
    */
-  gRestore(): LispValue {
+  gRestore(arguments_: Cons = Cons.nil): LispValue {
     return this.#execute('Can not restore.', (context) => {
+      if (arguments_.length() !== 0) return null;
       context.restore();
       return InterpretedSymbol.of('t');
     });
@@ -1099,8 +1111,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
     });
   }
 
-  gClip(): LispValue {
+  gClip(arguments_: Cons = Cons.nil): LispValue {
     return this.#execute('Can not clip.', (context) => {
+      if (arguments_.length() !== 0) return null;
       context.clip();
       return InterpretedSymbol.of('t');
     });
@@ -1140,8 +1153,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
     });
   }
 
-  gResetTransform(): LispValue {
+  gResetTransform(arguments_: Cons = Cons.nil): LispValue {
     return this.#execute('Can not reset transform.', (context) => {
+      if (arguments_.length() !== 0) return null;
       context.resetTransform();
       return InterpretedSymbol.of('t');
     });
@@ -1263,8 +1277,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
     });
   }
 
-  gReset(): LispValue {
+  gReset(arguments_: Cons = Cons.nil): LispValue {
     return this.#execute('Can not reset.', (context) => {
+      if (arguments_.length() !== 0) return null;
       context.reset();
       return InterpretedSymbol.of('t');
     });
@@ -1272,12 +1287,16 @@ export class GraphicsPlugin implements KeiLispPlugin {
 
   // gWidth / gHeight / gPixel return bigint so their integer results are
   // kei-lisp v3 integers (exact, `integerp` → t) rather than floats.
-  gWidth(): LispValue {
-    return this.#execute('Can not get width.', () => BigInt(this.canvas.width));
+  gWidth(arguments_: Cons = Cons.nil): LispValue {
+    return this.#execute('Can not get width.', () =>
+      arguments_.length() === 0 ? BigInt(this.canvas.width) : null,
+    );
   }
 
-  gHeight(): LispValue {
-    return this.#execute('Can not get height.', () => BigInt(this.canvas.height));
+  gHeight(arguments_: Cons = Cons.nil): LispValue {
+    return this.#execute('Can not get height.', () =>
+      arguments_.length() === 0 ? BigInt(this.canvas.height) : null,
+    );
   }
 
   gPixel(arguments_: Cons): LispValue {

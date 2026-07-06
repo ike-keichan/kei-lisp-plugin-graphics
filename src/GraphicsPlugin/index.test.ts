@@ -986,6 +986,18 @@ describe('GraphicsPlugin', () => {
       expect(ctx.textRendering).toBe('geometricPrecision');
     });
 
+    it('gshadow-color accepts a 3-number RGB tuple like the other color setters', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gshadow-color', 255, 0, 0)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.shadowColor).toBe('rgb(255, 0, 0)');
+    });
+
+    it('gshadow-color accepts a 4-number RGBA tuple', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gshadow-color', 255, 0, 0, 0.5)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.shadowColor).toBe('rgba(255, 0, 0, 0.5)');
+    });
+
     it('gclear-rect forwards to ctx.clearRect', () => {
       const { plugin, ctx } = openPlugin();
       call(plugin, 'gclear-rect', 1, 2, 3, 4);
@@ -1389,6 +1401,37 @@ describe('GraphicsPlugin', () => {
           );
         },
       );
+
+      const zeroArgumentNames = [
+        'gclip',
+        'gfill',
+        'gfinish-path',
+        'gheight',
+        'greset',
+        'greset-transform',
+        'grestore',
+        'gsave',
+        'gstart-path',
+        'gstroke',
+        'gwidth',
+      ];
+
+      it.each(zeroArgumentNames)('%s signals an EvalError when given any argument', (name) => {
+        const { plugin } = openPlugin();
+        expectSignals(() => call(plugin, name, 1));
+      });
+
+      it('gopen with an argument signals and leaves the canvas closed', () => {
+        const { plugin } = makePlugin();
+        expectSignals(() => call(plugin, 'gopen', 1), 'Can not open.');
+        expect(plugin.isOpen).toBe(false);
+      });
+
+      it('gclose with an argument signals and leaves the canvas open', () => {
+        const { plugin } = openPlugin();
+        expectSignals(() => call(plugin, 'gclose', 1), 'Can not close.');
+        expect(plugin.isOpen).toBe(true);
+      });
     });
   });
 
