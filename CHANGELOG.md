@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`gshadow-color` accepts the RGB / RGBA tuple forms** (`(gshadow-color
+255 0 0)`), matching the other color setters; previously it required
+  exactly one argument.
+
 - **Bundled Lisp pattern files** under `lisp/`, loadable with kei-lisp v3's
   `load` (kei-lisp roadmap follow-up, #21): `grid.lisp` (`ggrid` strokes a
   grid across the canvas), `palette.lisp` (`gpalette` / `gpalette-color`,
@@ -28,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `^3.0.1`.
 
 ### Changed
+
+- **The zero-argument functions now enforce their arity.** `gopen` /
+  `gclose` / `gwidth` / `gheight` / `greset` / `gstart-path` /
+  `gfinish-path` / `gfill` / `gstroke` / `gclip` / `greset-transform` /
+  `gsave` / `grestore` used to silently accept (and act despite) extra
+  arguments — `(gclose 1)` really closed the canvas; they now signal an
+  evaluation error like every other function.
 
 - **BREAKING: failures signal evaluation errors instead of printing to
   stderr and returning `nil`** (kei-lisp roadmap follow-up, #21). Every
