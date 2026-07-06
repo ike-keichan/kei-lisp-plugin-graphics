@@ -131,10 +131,6 @@ this to their output panel.
 `gfill-text` and `gstroke-text` also accept an optional fourth argument
 `maxWidth: number` that scales the text to fit within that width.
 
-`gtext-line` and `gtext-dire` are deprecated aliases of `gtext-baseline` and
-`gtext-direction`, kept for backward compatibility with the legacy Graphist
-names.
-
 ## Transform
 
 | Function           | Arguments                  | Description                                     |

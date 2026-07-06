@@ -85,8 +85,8 @@ const COMPOSITE_OPERATIONS = new Set<string>([
  * @class
  * @classdesc Canvas2D drawing plugin for the kei-lisp interpreter. Implements
  *            the `KeiLispPlugin` contract (`name` / `has` / `apply`) and
- *            exposes 75 `g…` Lisp functions (plus two deprecated aliases)
- *            that proxy to a 2D rendering context. Failures (wrong arity,
+ *            exposes 75 `g…` Lisp functions that proxy to a 2D rendering
+ *            context. Failures (wrong arity,
  *            type mismatch, closed canvas, canvas-level errors) signal an
  *            `EvalError` that Lisp callers can intercept with
  *            `(handler-case … (eval-error (e) …))`; only diagnostics from
@@ -167,10 +167,6 @@ export class GraphicsPlugin implements KeiLispPlugin {
     aTable.set(InterpretedSymbol.of('gtext-direction'), 'gTextDirection');
     aTable.set(InterpretedSymbol.of('gtext-font'), 'gTextFont');
     aTable.set(InterpretedSymbol.of('gtext-baseline'), 'gTextBaseline');
-    // Deprecated aliases kept for backward compatibility with the legacy
-    // Graphist names; prefer gtext-direction / gtext-baseline.
-    aTable.set(InterpretedSymbol.of('gtext-dire'), 'gTextDirection');
-    aTable.set(InterpretedSymbol.of('gtext-line'), 'gTextBaseline');
     aTable.set(InterpretedSymbol.of('gtranslate'), 'gTranslate');
     aTable.set(InterpretedSymbol.of('grect'), 'gRect');
     aTable.set(InterpretedSymbol.of('grotate'), 'gRotate');

@@ -298,11 +298,11 @@ describe('GraphicsPlugin', () => {
       expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
     });
 
-    it('includes the deprecated aliases alongside the new names', () => {
+    it('no longer lists the legacy Graphist aliases removed in v4', () => {
       const names = GraphicsPlugin.functionNames();
-      expect(names).toEqual(
-        expect.arrayContaining(['gtext-dire', 'gtext-direction', 'gtext-line', 'gtext-baseline']),
-      );
+      expect(names).toEqual(expect.arrayContaining(['gtext-direction', 'gtext-baseline']));
+      expect(names).not.toContain('gtext-dire');
+      expect(names).not.toContain('gtext-line');
     });
   });
 
@@ -632,7 +632,7 @@ describe('GraphicsPlugin', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const result = plugin.apply(
-        InterpretedSymbol.of('gtext-dire'),
+        InterpretedSymbol.of('gtext-direction'),
         arguments_(direction),
         makeContext(),
       );
@@ -644,7 +644,7 @@ describe('GraphicsPlugin', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       expectSignals(() =>
-        plugin.apply(InterpretedSymbol.of('gtext-dire'), arguments_(1), makeContext()),
+        plugin.apply(InterpretedSymbol.of('gtext-direction'), arguments_(1), makeContext()),
       );
     });
   });
@@ -1186,20 +1186,18 @@ describe('GraphicsPlugin', () => {
   });
 
   describe('API design cleanups (#32)', () => {
-    it('gtext-direction is the primary name and gtext-dire still works as an alias', () => {
+    it('gtext-direction works and the removed gtext-dire alias is not claimed', () => {
       const { plugin, ctx } = openPlugin();
       expect(call(plugin, 'gtext-direction', 'rtl')).toBe(InterpretedSymbol.of('t'));
       expect(ctx.direction).toBe('rtl');
-      expect(call(plugin, 'gtext-dire', 'ltr')).toBe(InterpretedSymbol.of('t'));
-      expect(ctx.direction).toBe('ltr');
+      expect(plugin.has(InterpretedSymbol.of('gtext-dire'))).toBe(false);
     });
 
-    it('gtext-baseline is the primary name and gtext-line still works as an alias', () => {
+    it('gtext-baseline works and the removed gtext-line alias is not claimed', () => {
       const { plugin, ctx } = openPlugin();
       expect(call(plugin, 'gtext-baseline', 'middle')).toBe(InterpretedSymbol.of('t'));
       expect(ctx.textBaseline).toBe('middle');
-      expect(call(plugin, 'gtext-line', 'top')).toBe(InterpretedSymbol.of('t'));
-      expect(ctx.textBaseline).toBe('top');
+      expect(plugin.has(InterpretedSymbol.of('gtext-line'))).toBe(false);
     });
 
     it('gpattern accepts a string repetition keyword', () => {
@@ -1275,9 +1273,9 @@ describe('GraphicsPlugin', () => {
         { name: 'gstroke-text', args: [42, 1, 2] },
         { name: 'gstroke-tri', args: [1, 2, 3, 4, 5, 'x'] },
         { name: 'gtext-align', args: [1] },
-        { name: 'gtext-dire', args: [1] },
+        { name: 'gtext-direction', args: [1] },
         { name: 'gtext-font', args: [1] },
-        { name: 'gtext-line', args: [1] },
+        { name: 'gtext-baseline', args: [1] },
         { name: 'gtranslate', args: [1, 'x'] },
         { name: 'grect', args: [1, 2, 3, 'x'] },
         { name: 'grotate', args: ['x'] },
@@ -1354,9 +1352,9 @@ describe('GraphicsPlugin', () => {
         { name: 'gstroke-text', args: ['a', 1] },
         { name: 'gstroke-tri', args: [1, 2, 3, 4, 5] },
         { name: 'gtext-align', args: ['left', 'right'] },
-        { name: 'gtext-dire', args: ['ltr', 'rtl'] },
+        { name: 'gtext-direction', args: ['ltr', 'rtl'] },
         { name: 'gtext-font', args: ['a', 'b'] },
-        { name: 'gtext-line', args: ['top', 'middle'] },
+        { name: 'gtext-baseline', args: ['top', 'middle'] },
         { name: 'gtranslate', args: [1] },
         { name: 'grect', args: [1, 2, 3] },
         { name: 'grotate', args: [1, 2] },

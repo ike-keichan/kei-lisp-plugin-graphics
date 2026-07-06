@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **BREAKING: the deprecated `gtext-line` / `gtext-dire` aliases.** They
+  were kept in v3 for backward compatibility with the legacy Graphist
+  names, with removal announced for the next major release; use
+  `gtext-baseline` / `gtext-direction` instead.
+
 ### Added
 
 - **Bundled Lisp pattern files** under `lisp/`, loadable with kei-lisp v3's
