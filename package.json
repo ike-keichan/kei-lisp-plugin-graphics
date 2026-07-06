@@ -36,7 +36,8 @@
   },
   "types": "./dist/index.d.ts",
   "files": [
-    "dist/"
+    "dist/",
+    "lisp/"
   ],
   "scripts": {
     "prepare": "pnpm build",
