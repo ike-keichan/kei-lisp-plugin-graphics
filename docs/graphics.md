@@ -16,7 +16,10 @@ signal an **evaluation error** that Lisp callers can intercept with
 
 An unhandled error aborts evaluation and is reported at the interpreter
 boundary (the REPL prints it; library callers catch it as a kei-lisp
-`EvalError`).
+`EvalError`). One deliberate exception: the color-taking functions
+(`gcolor`, `gfill-color`, `gstroke-color`, `gshadow-color`, `gclear`)
+parse their color best-effort — an unrecognized color spec prints a
+diagnostic and falls back to `"black"` instead of signaling.
 
 Numeric arguments accept any kei-lisp v3 number — integer, float, or exact
 rational (e.g. the result of `(/ 5 2)`) — and are converted to floats before
@@ -31,17 +34,17 @@ Enum-string setters (`gline-cap`, `gline-join`, `gtext-align`,
 allowed values and signal an error listing the expected values for anything
 else.
 
-Only diagnostics from asynchronous work — image loading (`gimage` /
+Diagnostics from asynchronous work — image loading (`gimage` /
 `gpattern`) and `OffscreenCanvas` file writes, which fail after the call has
-already returned — plus `gopen`'s informational size line still go to
-`process.stderr` (kei-lisp convention); browser hosts typically redirect
-this to their output panel.
+already returned — plus the best-effort color fallback above and `gopen`'s
+informational size line go to `process.stderr` (kei-lisp convention);
+browser hosts typically redirect this to their output panel.
 
 ## Lifecycle
 
 | Function  | Arguments    | Description                                                                                                        |
 | --------- | ------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `gopen`   | —            | Open the canvas (acquire 2D context, set `isOpen` to true)                                                         |
+| `gopen`   | —            | Open the canvas (validate the 2D context, paint it white, set `isOpen` to true)                                    |
 | `gclose`  | —            | Close the canvas                                                                                                   |
 | `gclear`  | — or `color` | Paint the entire canvas white, or with the given color (string / RGB / RGBA); the current `fillStyle` is preserved |
 | `greset`  | —            | Reset the context to its default state (`ctx.reset`)                                                               |
@@ -85,9 +88,9 @@ this to their output panel.
 
 | Function            | Arguments                                                      | Description                                                                                   |
 | ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `gcolor`            | `color: string`                                                | Set both fill and stroke color                                                                |
-| `gfill-color`       | `color: string`                                                | Set fill color (`fillStyle`)                                                                  |
-| `gstroke-color`     | `color: string`                                                | Set stroke color (`strokeStyle`)                                                              |
+| `gcolor`            | `color: string` or `r, g, b[, a]: number`                      | Set both fill and stroke color (string / RGB / RGBA)                                          |
+| `gfill-color`       | `color: string` or `r, g, b[, a]: number`                      | Set fill color (`fillStyle`)                                                                  |
+| `gstroke-color`     | `color: string` or `r, g, b[, a]: number`                      | Set stroke color (`strokeStyle`)                                                              |
 | `gline-width`       | `width: number`                                                | Set line width                                                                                |
 | `gline-cap`         | `cap: string`                                                  | Set line cap (`"butt"` / `"round"` / `"square"`)                                              |
 | `gline-join`        | `join: string`                                                 | Set line join (`"miter"` / `"round"` / `"bevel"`)                                             |

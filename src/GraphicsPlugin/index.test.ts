@@ -1521,6 +1521,33 @@ describe('GraphicsPlugin', () => {
       }
     });
 
+    it('gsave-png with a path signals an EvalError in a plain browser with no process shim', () => {
+      const { plugin } = openPlugin();
+      const pathArguments = arguments_('never-written.png');
+      vi.stubGlobal('process', undefined);
+      try {
+        expectSignals(
+          () => plugin.gSavePng(pathArguments),
+          'Can not save png. Saving to a file path requires Node.js.',
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('gsave-png prints a diagnostic when the async OffscreenCanvas write fails', async () => {
+      const plugin = makeOffscreenPlugin(() => Promise.reject(new Error('encode failed')));
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        expect(call(plugin, 'gsave-png', 'never-written.png')).toBe(InterpretedSymbol.of('t'));
+        await vi.waitFor(() => {
+          expect(spy).toHaveBeenCalledWith('Can not save png.\n');
+        });
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     it('gsave-jpeg download signals an EvalError when toDataURL throws (tainted canvas)', () => {
       const { canvas, plugin } = makePlugin();
       call(plugin, 'gopen');

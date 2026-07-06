@@ -75,6 +75,17 @@ describe('bundled Lisp patterns (lisp/)', () => {
       ]);
       expect(ctx.stroke).toHaveBeenCalledTimes(5);
     });
+
+    it('ggrid signals an error for a non-positive step instead of looping forever', () => {
+      const { interpreter } = makeInterpreter();
+      interpreter.evalString('(load "lisp/grid.lisp")');
+      expect(interpreter.evalString('(handler-case (ggrid 0) (eval-error (e) e))')).toBe(
+        'ggrid: step must be positive',
+      );
+      expect(interpreter.evalString('(handler-case (ggrid -10) (eval-error (e) e))')).toBe(
+        'ggrid: step must be positive',
+      );
+    });
   });
 
   describe('palette.lisp', () => {
@@ -84,6 +95,14 @@ describe('bundled Lisp patterns (lisp/)', () => {
       expect(interpreter.evalString('(gpalette 0)')).toBe('#4e79a7');
       expect(interpreter.evalString('(gpalette 7)')).toBe('#9c755f');
       expect(interpreter.evalString('(gpalette 8)')).toBe('#4e79a7');
+    });
+
+    it('gpalette wraps negative indexes (kei-lisp mod truncates toward zero)', () => {
+      const { interpreter } = makeInterpreter();
+      interpreter.evalString('(load "lisp/palette.lisp")');
+      expect(interpreter.evalString('(gpalette -1)')).toBe('#9c755f');
+      expect(interpreter.evalString('(gpalette -8)')).toBe('#4e79a7');
+      expect(interpreter.evalString('(gpalette -9)')).toBe('#9c755f');
     });
 
     it('gpalette-color sets fill and stroke color to the palette entry', () => {

@@ -6,8 +6,11 @@
 ;;   (ggrid 40)
 
 ;; Draws vertical and horizontal grid lines every STEP pixels across the
-;; whole canvas, using the current stroke color and line width.
+;; whole canvas, using the current stroke color and line width. STEP must
+;; be positive; anything else would loop forever, so it signals an error.
 (defun ggrid (step)
+  (when (<= step 0)
+    (error "ggrid: step must be positive"))
   (do ((x step (+ x step)))
       ((>= x (gwidth)) t)
     (gstart-path)

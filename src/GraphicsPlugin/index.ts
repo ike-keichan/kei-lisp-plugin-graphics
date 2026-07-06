@@ -89,10 +89,11 @@ const COMPOSITE_OPERATIONS = new Set<string>([
  *            context. Failures (wrong arity,
  *            type mismatch, closed canvas, canvas-level errors) signal an
  *            `EvalError` that Lisp callers can intercept with
- *            `(handler-case … (eval-error (e) …))`; only diagnostics from
- *            asynchronous work (image loading, OffscreenCanvas file writes)
- *            still go to `process.stderr`, because they happen after the
- *            call has returned.
+ *            `(handler-case … (eval-error (e) …))`. Two exceptions still go
+ *            to `process.stderr` as diagnostics: asynchronous work (image
+ *            loading, OffscreenCanvas file writes), which fails after the
+ *            call has returned, and `selectColor`'s best-effort color
+ *            parsing, which falls back to black instead of failing.
  * @author Keisuke Ikeda
  */
 export class GraphicsPlugin implements KeiLispPlugin {
@@ -471,10 +472,15 @@ export class GraphicsPlugin implements KeiLispPlugin {
    * @return `t` on success
    */
   #writeCanvasToFile(path: string, mimeType: string, label: string): LispValue {
-    const fs =
-      typeof process.getBuiltinModule === 'function'
-        ? process.getBuiltinModule('node:fs')
-        : undefined;
+    // Reached through globalThis (like #print) so a plain browser with no
+    // `process` shim signals the EvalError below instead of crashing with a
+    // ReferenceError; getBuiltinModule keeps `node:fs` out of browser bundles.
+    const getBuiltinModule = (
+      globalThis as {
+        process?: { getBuiltinModule?: (id: 'node:fs') => typeof import('node:fs') };
+      }
+    ).process?.getBuiltinModule;
+    const fs = typeof getBuiltinModule === 'function' ? getBuiltinModule('node:fs') : undefined;
     if (fs === undefined) {
       throw new EvalError(`Can not save ${label}. Saving to a file path requires Node.js.`);
     }
@@ -488,9 +494,16 @@ export class GraphicsPlugin implements KeiLispPlugin {
         fs.writeFileSync(path, Buffer.from(base64, 'base64'));
         return InterpretedSymbol.of('t');
       }
-      void this.canvas.convertToBlob({ type: mimeType }).then(async (blob) => {
-        fs.writeFileSync(path, new Uint8Array(await blob.arrayBuffer()));
-      });
+      void this.canvas
+        .convertToBlob({ type: mimeType })
+        .then(async (blob) => {
+          fs.writeFileSync(path, new Uint8Array(await blob.arrayBuffer()));
+        })
+        .catch(() => {
+          // The write happens after this call has returned, so the failure
+          // can only be reported as a diagnostic (same as image loading).
+          this.#print(`Can not save ${label}.`);
+        });
       return InterpretedSymbol.of('t');
     } catch {
       throw new EvalError(`Can not save ${label}.`);

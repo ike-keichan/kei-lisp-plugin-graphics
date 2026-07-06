@@ -25,9 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the npm package (`files` now includes `lisp/`). Requires the kei-lisp
   fixes for plugin dispatch inside user functions and multi-form lambda
   bodies (kei-lisp #63 / #64), so the `kei-lisp` peer dependency is
-  `^3.0.1` (this also lands the peer-range bump that the entry below
-  describes: the `^2.2.0` range had been left in `package.json` by
-  mistake).
+  `^3.0.1`.
 
 ### Changed
 
@@ -53,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replacing the per-method legacy Graphist argument destructuring; behavior
   is unchanged apart from the error signaling described above.
 - **BREAKING: requires kei-lisp >= 3.** The `kei-lisp` peer dependency was
-  bumped from `^2.2.0` to `^3.0.0` to adopt the v3 numeric tower, whose
+  bumped from `^2.2.0` to `^3.0.1` to adopt the v3 numeric tower, whose
   integers (`bigint`) and exact rationals (`Rational`) flow into plugin
   arguments. All numeric arguments are now converted with `Numeric.toFloat`
   before reaching the Canvas 2D API, so integer, float, and rational values
