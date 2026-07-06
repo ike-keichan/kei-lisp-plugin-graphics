@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Bundled Lisp pattern files** under `lisp/`, loadable with kei-lisp v3's
+  `load` (kei-lisp roadmap follow-up, #21): `grid.lisp` (`ggrid` strokes a
+  grid across the canvas), `palette.lisp` (`gpalette` / `gpalette-color`,
+  an 8-color categorical palette with wrap-around indexing), and
+  `animation.lisp` (`ganimate` runs a frame loop over a draw lambda with
+  `gsleep` between frames). Documented in `docs/patterns.md` and shipped in
+  the npm package (`files` now includes `lisp/`). Requires the kei-lisp
+  fixes for plugin dispatch inside user functions and multi-form lambda
+  bodies (kei-lisp #63 / #64), so the `kei-lisp` peer dependency is
+  `^3.0.1` (this also lands the peer-range bump that the entry below
+  describes: the `^2.2.0` range had been left in `package.json` by
+  mistake).
+
 ### Changed
 
 - **BREAKING: failures signal evaluation errors instead of printing to

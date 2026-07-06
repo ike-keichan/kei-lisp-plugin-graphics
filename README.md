@@ -109,6 +109,22 @@ that Lisp code can intercept with `(handler-case … (eval-error (e) …))`.
 See [`docs/graphics.md`](./docs/graphics.md) for argument signatures and
 side effects.
 
+## Bundled Lisp patterns
+
+The package ships loadable `.lisp` pattern files under `lisp/` — a grid
+helper (`ggrid`), color-palette helpers (`gpalette` / `gpalette-color`),
+and a frame-loop helper (`ganimate`):
+
+```lisp
+(load "node_modules/kei-lisp-plugin-graphics/lisp/grid.lisp")
+(gopen)
+(ggrid 40)
+```
+
+`load` reads from the filesystem (Node.js); browser hosts can fetch the
+file's text and evaluate it instead. See
+[`docs/patterns.md`](./docs/patterns.md) for the full list.
+
 ## Environment support
 
 | Capability                            | Browser (`HTMLCanvasElement`)                            | `OffscreenCanvas` (worker) | Node.js (e.g. `@napi-rs/canvas`) |
@@ -128,6 +144,7 @@ In-depth documentation of each area:
 - [API docs (TypeDoc)](https://ike-keichan.github.io/kei-lisp-plugin-graphics/api/) — generated API documentation
 - [API Reference](./docs/api.md) — TypeScript / JavaScript API
 - [Graphics Reference](./docs/graphics.md) — every `g…` Lisp function
+- [Bundled Lisp Patterns](./docs/patterns.md) — the loadable `.lisp` helpers shipped under `lisp/`
 - [Non-goals](./docs/non-goals.md) — what this project deliberately does not do
 - [kei-lisp Plugin Guide](https://github.com/ike-keichan/kei-lisp/blob/main/docs/plugins.md) — how plugins integrate with the interpreter
 

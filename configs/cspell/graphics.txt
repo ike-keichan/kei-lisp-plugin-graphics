@@ -1,5 +1,6 @@
 Graphist
 galpha
+ganimate
 garc
 gbezcurve
 gclear
@@ -13,6 +14,7 @@ gfill
 gfilter
 gfinish
 gfont
+ggrid
 gheight
 gimage
 gis
@@ -23,6 +25,7 @@ gmeasure
 gmiter
 gmove
 gopen
+gpalette
 gpattern
 gpixel
 gquadcurve
