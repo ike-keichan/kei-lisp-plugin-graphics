@@ -7,7 +7,7 @@
 // repeated diagnostic strings) without per-line escape hatches.
 
 import type { KeiLispPlugin, LispValue, PluginContext } from 'kei-lisp';
-import { Cons, InterpretedSymbol, Numeric } from 'kei-lisp';
+import { Cons, EvalError, InterpretedSymbol, Numeric } from 'kei-lisp';
 
 // Allowed values for the enum-string setters, mirroring the Canvas 2D API
 // types. Invalid values are rejected with a diagnostic instead of being
@@ -86,7 +86,13 @@ const COMPOSITE_OPERATIONS = new Set<string>([
  * @classdesc Canvas2D drawing plugin for the kei-lisp interpreter. Implements
  *            the `KeiLispPlugin` contract (`name` / `has` / `apply`) and
  *            exposes 75 `g…` Lisp functions (plus two deprecated aliases)
- *            that proxy to a 2D rendering context.
+ *            that proxy to a 2D rendering context. Failures (wrong arity,
+ *            type mismatch, closed canvas, canvas-level errors) signal an
+ *            `EvalError` that Lisp callers can intercept with
+ *            `(handler-case … (eval-error (e) …))`; only diagnostics from
+ *            asynchronous work (image loading, OffscreenCanvas file writes)
+ *            still go to `process.stderr`, because they happen after the
+ *            call has returned.
  * @author Keisuke Ikeda
  */
 export class GraphicsPlugin implements KeiLispPlugin {
@@ -233,11 +239,13 @@ export class GraphicsPlugin implements KeiLispPlugin {
   /**
    * Writes a diagnostic line to `process.stderr`, matching the convention
    * used by kei-lisp itself (`Applier.format` writes to `process.stdout`).
-   * In a Node runtime this hits the real stderr; in a browser kei-lisp host
-   * (e.g. kei-lisp-web) the host typically swaps `process.stderr.write` for
-   * a sink that routes to the REPL output panel. In a plain browser with no
-   * `process` shim at all, the line falls back to `console.error` instead of
-   * throwing.
+   * Used only where an `EvalError` cannot reach the caller: asynchronous
+   * work (image loading), best-effort color parsing, and the informational
+   * line printed by `gopen`. In a Node runtime this hits the real stderr; in
+   * a browser kei-lisp host (e.g. kei-lisp-web) the host typically swaps
+   * `process.stderr.write` for a sink that routes to the REPL output panel.
+   * In a plain browser with no `process` shim at all, the line falls back to
+   * `console.error` instead of throwing.
    * @param line - the line to write
    */
   #print(line: string): void {
@@ -253,7 +261,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
   /**
    * Resolves an image for the given source and runs `draw` with it —
    * synchronously when the image is already loaded, on its `load` event
-   * otherwise. A load failure prints a diagnostic once.
+   * otherwise. A load failure prints a diagnostic once (the failure happens
+   * asynchronously, after the calling `g…` function has already returned, so
+   * it cannot signal an `EvalError`).
    * @param source - the image URL / data URI
    * @param draw - the drawing action to run once the image is available
    */
@@ -277,13 +287,33 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   /**
-   * Shared guard-and-dispatch skeleton for the newer `g…` methods: checks the
-   * context and the open flag, runs `body`, and converts both a `null` return
-   * and a thrown exception into `failureMessage` + `Cons.nil`.
-   * @param failureMessage - the diagnostic printed when `body` fails
+   * Returns the 2D context, signaling an `EvalError` when the canvas exposes
+   * no usable context or has not been opened with `gopen`.
+   * @return the 2D rendering context
+   */
+  #requireOpenContext(): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+    if (this.ctx === null) {
+      throw new EvalError(
+        'Unable to initialize canvas. The browser or machine may not support it.',
+      );
+    }
+    if (!this.isOpen) {
+      throw new EvalError('The canvas is closed and cannot be executed.');
+    }
+    return this.ctx;
+  }
+
+  /**
+   * Shared guard-and-dispatch skeleton for the `g…` methods: requires an
+   * open canvas context, runs `body`, and signals an `EvalError` carrying
+   * `failureMessage` when `body` returns `null` (bad arguments) or throws a
+   * canvas-level error. The error propagates through the evaluator, where
+   * Lisp callers can intercept it with
+   * `(handler-case … (eval-error (e) …))`.
+   * @param failureMessage - the message of the signaled `EvalError`
    * @param body - the drawing action; returns the Lisp result, or `null` on
    *               bad arguments
-   * @return the body's result, or `Cons.nil` on failure
+   * @return the body's result
    */
   #execute(
     failureMessage: string,
@@ -291,19 +321,17 @@ export class GraphicsPlugin implements KeiLispPlugin {
       context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     ) => LispValue | null,
   ): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (!this.isOpen) {
-      this.#print('The canvas is closed and cannot be executed.');
-      return Cons.nil;
-    }
+    const context = this.#requireOpenContext();
+    let result: LispValue | null;
     try {
-      const result = body(this.ctx);
-      if (result !== null) return result;
-    } catch {
-      // fall through to the failure message
+      result = body(context);
+    } catch (error) {
+      throw error instanceof EvalError ? error : new EvalError(failureMessage);
     }
-    this.#print(failureMessage);
-    return Cons.nil;
+    if (result === null) {
+      throw new EvalError(failureMessage);
+    }
+    return result;
   }
 
   /**
@@ -411,14 +439,13 @@ export class GraphicsPlugin implements KeiLispPlugin {
    * no `document` — those callers must pass a file path instead.
    * @param mimeType - the image MIME type to encode
    * @param label - the format name used in diagnostics ("jpeg" / "png")
-   * @return `t` on success, `Cons.nil` otherwise
+   * @return `t` on success
    */
   #downloadCanvas(mimeType: string, label: string): LispValue {
     if (typeof document === 'undefined' || !('toDataURL' in this.canvas)) {
-      this.#print(
+      throw new EvalError(
         `Can not save ${label}. Browser download needs a DOM and an HTMLCanvasElement; pass a file path to save on Node.js.`,
       );
-      return Cons.nil;
     }
     try {
       const link = document.createElement('a');
@@ -429,10 +456,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
       link.remove();
       return InterpretedSymbol.of('t');
     } catch {
-      this.#print(
+      throw new EvalError(
         `Can not save ${label}. If you are using an image in the canvas, you can't save ${label}.`,
       );
-      return Cons.nil;
     }
   }
 
@@ -446,7 +472,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
    * @param path - the destination file path
    * @param mimeType - the image MIME type to encode
    * @param label - the format name used in diagnostics ("jpeg" / "png")
-   * @return `t` on success, `Cons.nil` otherwise
+   * @return `t` on success
    */
   #writeCanvasToFile(path: string, mimeType: string, label: string): LispValue {
     const fs =
@@ -454,8 +480,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
         ? process.getBuiltinModule('node:fs')
         : undefined;
     if (fs === undefined) {
-      this.#print(`Can not save ${label}. Saving to a file path requires Node.js.`);
-      return Cons.nil;
+      throw new EvalError(`Can not save ${label}. Saving to a file path requires Node.js.`);
     }
     try {
       if ('toDataURL' in this.canvas) {
@@ -472,8 +497,7 @@ export class GraphicsPlugin implements KeiLispPlugin {
       });
       return InterpretedSymbol.of('t');
     } catch {
-      this.#print(`Can not save ${label}.`);
-      return Cons.nil;
+      throw new EvalError(`Can not save ${label}.`);
     }
   }
 
@@ -491,187 +515,53 @@ export class GraphicsPlugin implements KeiLispPlugin {
    * @param aSymbol - the call symbol
    * @param arguments_ - the evaluated argument list
    * @param _context - the interpreter context (unused by this plugin)
-   * @return the method's result, or `Cons.nil` if dispatch fails
+   * @return the method's result
    */
   apply(aSymbol: InterpretedSymbol, arguments_: Cons, _context: PluginContext): LispValue {
     const methodName = GraphicsPlugin.#builtInFunctions.get(aSymbol);
     if (methodName === undefined) {
-      this.#print(`I could find no procedure description for ${String(aSymbol)}`);
-      return Cons.nil;
+      throw new EvalError(`I could find no procedure description for ${String(aSymbol)}`);
     }
     const target = this as unknown as Record<string, (arguments__: Cons) => LispValue>;
     return target[methodName].call(this, arguments_);
   }
 
-  /**
-   * Checks whether the canvas exposes a usable 2D context, and narrows
-   * `this.ctx` to non-null for the caller when it returns true.
-   * @return type predicate — true when context is non-null
-   */
-  checkSupport(): this is GraphicsPlugin & {
-    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-  } {
-    if (this.ctx === null) {
-      this.#print('Unable to initialize canvas. The browser or machine may not support it.');
-      return false;
-    }
-    return true;
-  }
-
   gAlpha(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-          const aFloat = Numeric.toFloat(arguments_.car);
-          const aNumber = aFloat <= 0 ? 0 : aFloat >= 1 ? 1 : aFloat;
-          this.ctx.globalAlpha = aNumber;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set alpha.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set alpha.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set alpha.', (context) => {
+      const a = this.#numbers(arguments_, 1);
+      if (a === null) return null;
+      const aNumber = a[0] <= 0 ? 0 : a[0] >= 1 ? 1 : a[0];
+      context.globalAlpha = aNumber;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gArc(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 6) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          const cdr5 = cdr4.cdr as Cons;
-          const a5 = cdr5.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4) &&
-            Cons.isNumber(a5)
-          ) {
-            const isAFlag = Numeric.toFloat(a5) >= 0;
-            this.ctx.arc(
-              Numeric.toFloat(a0),
-              Numeric.toFloat(a1),
-              Numeric.toFloat(a2),
-              (Math.PI / 180) * Numeric.toFloat(a3),
-              (Math.PI / 180) * Numeric.toFloat(a4),
-              isAFlag,
-            );
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw arc.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw arc.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw arc.', (context) => {
+      const a = this.#numbers(arguments_, 6);
+      if (a === null) return null;
+      const isAFlag = a[5] >= 0;
+      context.arc(a[0], a[1], a[2], (Math.PI / 180) * a[3], (Math.PI / 180) * a[4], isAFlag);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gArcTo(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 5) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4)
-          ) {
-            this.ctx.arcTo(
-              Numeric.toFloat(a0),
-              Numeric.toFloat(a1),
-              Numeric.toFloat(a2),
-              Numeric.toFloat(a3),
-              Numeric.toFloat(a4),
-            );
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw arc to.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw arc to.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw arc to.', (context) => {
+      const a = this.#numbers(arguments_, 5);
+      if (a === null) return null;
+      context.arcTo(a[0], a[1], a[2], a[3], a[4]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gBezCurveTo(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 6) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          const cdr5 = cdr4.cdr as Cons;
-          const a5 = cdr5.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4) &&
-            Cons.isNumber(a5)
-          ) {
-            this.ctx.bezierCurveTo(
-              Numeric.toFloat(a0),
-              Numeric.toFloat(a1),
-              Numeric.toFloat(a2),
-              Numeric.toFloat(a3),
-              Numeric.toFloat(a4),
-              Numeric.toFloat(a5),
-            );
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw bezier curve.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw bezier curve.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw bezier curve.', (context) => {
+      const a = this.#numbers(arguments_, 6);
+      if (a === null) return null;
+      context.bezierCurveTo(a[0], a[1], a[2], a[3], a[4], a[5]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gClear(arguments_: Cons): LispValue {
@@ -686,108 +576,55 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   gClose(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.isOpen = false;
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not close.');
-        return Cons.nil;
-      }
+    if (this.ctx === null) {
+      throw new EvalError(
+        'Unable to initialize canvas. The browser or machine may not support it.',
+      );
     }
-    this.#print('The canvas has already been closed.');
-    return Cons.nil;
+    if (!this.isOpen) {
+      throw new EvalError('The canvas has already been closed.');
+    }
+    try {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    } catch {
+      throw new EvalError('Can not close.');
+    }
+    this.isOpen = false;
+    return InterpretedSymbol.of('t');
   }
 
   gColor(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() >= 1) {
-          const aColor = this.selectColor(arguments_);
-          this.ctx.fillStyle = aColor;
-          this.ctx.strokeStyle = aColor;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set color.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set color.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set color.', (context) => {
+      if (arguments_.length() < 1) return null;
+      const aColor = this.selectColor(arguments_);
+      context.fillStyle = aColor;
+      context.strokeStyle = aColor;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gFill(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.fill();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not fill.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not fill.', (context) => {
+      context.fill();
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gFillColor(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() >= 1) {
-          const aColor = this.selectColor(arguments_);
-          this.ctx.fillStyle = aColor;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set fill color.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set fill color.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set fill color.', (context) => {
+      if (arguments_.length() < 1) return null;
+      context.fillStyle = this.selectColor(arguments_);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gFillRect(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 4) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.fillRect(
-              Numeric.toFloat(a0),
-              Numeric.toFloat(a1),
-              Numeric.toFloat(a2),
-              Numeric.toFloat(a3),
-            );
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw fill rectangle.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw fill rectangle.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw fill rectangle.', (context) => {
+      const a = this.#numbers(arguments_, 4);
+      if (a === null) return null;
+      context.fillRect(a[0], a[1], a[2], a[3]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gFillText(arguments_: Cons): LispValue {
@@ -807,61 +644,23 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   gFillTri(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 6) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          const cdr5 = cdr4.cdr as Cons;
-          const a5 = cdr5.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4) &&
-            Cons.isNumber(a5)
-          ) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(Numeric.toFloat(a0), Numeric.toFloat(a1));
-            this.ctx.lineTo(Numeric.toFloat(a2), Numeric.toFloat(a3));
-            this.ctx.lineTo(Numeric.toFloat(a4), Numeric.toFloat(a5));
-            this.ctx.fill();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw fill triangle.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw fill triangle.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw fill triangle.', (context) => {
+      const a = this.#numbers(arguments_, 6);
+      if (a === null) return null;
+      context.beginPath();
+      context.moveTo(a[0], a[1]);
+      context.lineTo(a[2], a[3]);
+      context.lineTo(a[4], a[5]);
+      context.fill();
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gFinishPath(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.closePath();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not finish path.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not finish path.', (context) => {
+      context.closePath();
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gImage(arguments_: Cons): LispValue {
@@ -891,26 +690,12 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   gLineTo(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 2) {
-          const a0 = arguments_.car;
-          const a1 = (arguments_.cdr as Cons).car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.lineTo(Numeric.toFloat(a0), Numeric.toFloat(a1));
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw line to');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw line to');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw line to', (context) => {
+      const a = this.#numbers(arguments_, 2);
+      if (a === null) return null;
+      context.lineTo(a[0], a[1]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gLineCap(arguments_: Cons): LispValue {
@@ -938,66 +723,44 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   gLineWidth(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-          const aFloat = Numeric.toFloat(arguments_.car);
-          const aNumber = aFloat <= 0 ? 1 : aFloat;
-          this.ctx.lineWidth = aNumber;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set line width.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set line width.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set line width.', (context) => {
+      const a = this.#numbers(arguments_, 1);
+      if (a === null) return null;
+      context.lineWidth = a[0] <= 0 ? 1 : a[0];
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gMoveTo(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 2) {
-          const a0 = arguments_.car;
-          const a1 = (arguments_.cdr as Cons).car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.moveTo(Numeric.toFloat(a0), Numeric.toFloat(a1));
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not move');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not move');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not move', (context) => {
+      const a = this.#numbers(arguments_, 2);
+      if (a === null) return null;
+      context.moveTo(a[0], a[1]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gOpen(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (!this.isOpen) {
-      try {
-        this.isOpen = true;
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.fillStyle = '#000000';
-        this.#print(`canvas size, width : ${this.canvas.width} height : ${this.canvas.height}`);
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not open.');
-        return Cons.nil;
-      }
+    if (this.ctx === null) {
+      throw new EvalError(
+        'Unable to initialize canvas. The browser or machine may not support it.',
+      );
     }
-    this.#print('The canvas has already been opened.');
-    return Cons.nil;
+    if (this.isOpen) {
+      throw new EvalError('The canvas has already been opened.');
+    }
+    try {
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      this.ctx.fillStyle = '#000000';
+    } catch {
+      // The canvas stays closed when the initial clear fails, so a later
+      // gopen can retry (the legacy code left it marked open).
+      throw new EvalError('Can not open.');
+    }
+    this.isOpen = true;
+    this.#print(`canvas size, width : ${this.canvas.width} height : ${this.canvas.height}`);
+    return InterpretedSymbol.of('t');
   }
 
   gPattern(arguments_: Cons): LispValue {
@@ -1021,36 +784,12 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   gQuadCurveTo(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 4) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.quadraticCurveTo(
-              Numeric.toFloat(a0),
-              Numeric.toFloat(a1),
-              Numeric.toFloat(a2),
-              Numeric.toFloat(a3),
-            );
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw quadratic curve.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw quadratic curve.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw quadratic curve.', (context) => {
+      const a = this.#numbers(arguments_, 4);
+      if (a === null) return null;
+      context.quadraticCurveTo(a[0], a[1], a[2], a[3]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gSaveJpeg(arguments_: Cons): LispValue {
@@ -1068,213 +807,105 @@ export class GraphicsPlugin implements KeiLispPlugin {
    * @param arguments_ - the evaluated argument list (empty, or one path string)
    * @param mimeType - the image MIME type to encode
    * @param label - the format name used in diagnostics ("jpeg" / "png")
-   * @return `t` on success, `Cons.nil` otherwise
+   * @return `t` on success
    */
   saveCanvas(arguments_: Cons, mimeType: string, label: string): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      const length_ = arguments_.length();
-      if (length_ === 0) {
-        return this.#downloadCanvas(mimeType, label);
-      }
-      if (length_ === 1 && Cons.isString(arguments_.car)) {
-        return this.#writeCanvasToFile(arguments_.car, mimeType, label);
-      }
-      this.#print(`Can not save ${label}.`);
-      return Cons.nil;
+    this.#requireOpenContext();
+    const length_ = arguments_.length();
+    if (length_ === 0) {
+      return this.#downloadCanvas(mimeType, label);
     }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    if (length_ === 1 && Cons.isString(arguments_.car)) {
+      return this.#writeCanvasToFile(arguments_.car, mimeType, label);
+    }
+    throw new EvalError(`Can not save ${label}.`);
   }
 
   gScale(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 2) {
-          const a0 = arguments_.car;
-          const a1 = (arguments_.cdr as Cons).car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.scale(Numeric.toFloat(a0), Numeric.toFloat(a1));
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not scale.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not scale.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not scale.', (context) => {
+      const a = this.#numbers(arguments_, 2);
+      if (a === null) return null;
+      context.scale(a[0], a[1]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gShadowBlur(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-        this.ctx.shadowBlur = Numeric.toFloat(arguments_.car);
-        return InterpretedSymbol.of('t');
-      }
-      this.#print('Can not set shadow blur.');
-      return Cons.nil;
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set shadow blur.', (context) => {
+      const a = this.#numbers(arguments_, 1);
+      if (a === null) return null;
+      context.shadowBlur = a[0];
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gShadowColor(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1) {
-          const aColor = this.selectColor(arguments_);
-          this.ctx.shadowColor = aColor;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set shadow color.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set shadow color.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set shadow color.', (context) => {
+      if (arguments_.length() !== 1) return null;
+      context.shadowColor = this.selectColor(arguments_);
+      return InterpretedSymbol.of('t');
+    });
   }
 
-  // NOTE: gShadowOffsetX, gShadowOffsetY, and gShadowBlur intentionally omit try/catch.
-  // The original Graphist.js had the same structure for all three shadow-property setters.
   gShadowOffsetX(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-        this.ctx.shadowOffsetX = Numeric.toFloat(arguments_.car);
-        return InterpretedSymbol.of('t');
-      }
-      this.#print('Can not set shadow offsetX.');
-      return Cons.nil;
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set shadow offsetX.', (context) => {
+      const a = this.#numbers(arguments_, 1);
+      if (a === null) return null;
+      context.shadowOffsetX = a[0];
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gShadowOffsetY(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-        this.ctx.shadowOffsetY = Numeric.toFloat(arguments_.car);
-        return InterpretedSymbol.of('t');
-      }
-      this.#print('Can not set shadow offsetY.');
-      return Cons.nil;
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set shadow offsetY.', (context) => {
+      const a = this.#numbers(arguments_, 1);
+      if (a === null) return null;
+      context.shadowOffsetY = a[0];
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gSleep(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      const sleep = (ms: number): void => {
-        const time = Date.now() + ms;
-        while (Date.now() < time) {
-          // busy wait
-        }
-      };
-      if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-        sleep(Numeric.toFloat(arguments_.car));
-        return InterpretedSymbol.of('t');
+    return this.#execute('Can not sleep', () => {
+      const a = this.#numbers(arguments_, 1);
+      if (a === null) return null;
+      const time = Date.now() + a[0];
+      while (Date.now() < time) {
+        // busy wait
       }
-      this.#print('Can not sleep');
-      return Cons.nil;
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gStartPath(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.beginPath();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not start path.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not start path.', (context) => {
+      context.beginPath();
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gStroke(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.stroke();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not stroke.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not stroke.', (context) => {
+      context.stroke();
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gStrokeColor(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() >= 1) {
-          const aColor = this.selectColor(arguments_);
-          this.ctx.strokeStyle = aColor;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set stroke color');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set stroke color');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set stroke color', (context) => {
+      if (arguments_.length() < 1) return null;
+      context.strokeStyle = this.selectColor(arguments_);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gStrokeRect(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 4) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.strokeRect(
-              Numeric.toFloat(a0),
-              Numeric.toFloat(a1),
-              Numeric.toFloat(a2),
-              Numeric.toFloat(a3),
-            );
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw stroke rectangle.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw stroke rectangle.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw stroke rectangle.', (context) => {
+      const a = this.#numbers(arguments_, 4);
+      if (a === null) return null;
+      context.strokeRect(a[0], a[1], a[2], a[3]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gStrokeText(arguments_: Cons): LispValue {
@@ -1294,47 +925,17 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   gStrokeTri(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 6) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          const cdr4 = cdr3.cdr as Cons;
-          const a4 = cdr4.car;
-          const cdr5 = cdr4.cdr as Cons;
-          const a5 = cdr5.car;
-          if (
-            Cons.isNumber(a0) &&
-            Cons.isNumber(a1) &&
-            Cons.isNumber(a2) &&
-            Cons.isNumber(a3) &&
-            Cons.isNumber(a4) &&
-            Cons.isNumber(a5)
-          ) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(Numeric.toFloat(a0), Numeric.toFloat(a1));
-            this.ctx.lineTo(Numeric.toFloat(a2), Numeric.toFloat(a3));
-            this.ctx.lineTo(Numeric.toFloat(a4), Numeric.toFloat(a5));
-            this.ctx.closePath();
-            this.ctx.stroke();
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw stroke triangle.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw stroke triangle.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw stroke triangle.', (context) => {
+      const a = this.#numbers(arguments_, 6);
+      if (a === null) return null;
+      context.beginPath();
+      context.moveTo(a[0], a[1]);
+      context.lineTo(a[2], a[3]);
+      context.lineTo(a[4], a[5]);
+      context.closePath();
+      context.stroke();
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gTextAlign(arguments_: Cons): LispValue {
@@ -1374,97 +975,38 @@ export class GraphicsPlugin implements KeiLispPlugin {
   }
 
   gTextFont(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isString(arguments_.car)) {
-          this.ctx.font = arguments_.car;
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not set text font.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not set text font.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not set text font.', (context) => {
+      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
+      context.font = arguments_.car;
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gTranslate(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 2) {
-          const a0 = arguments_.car;
-          const a1 = (arguments_.cdr as Cons).car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1)) {
-            this.ctx.translate(Numeric.toFloat(a0), Numeric.toFloat(a1));
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not translate.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not translate.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not translate.', (context) => {
+      const a = this.#numbers(arguments_, 2);
+      if (a === null) return null;
+      context.translate(a[0], a[1]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gRect(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 4) {
-          const a0 = arguments_.car;
-          const cdr1 = arguments_.cdr as Cons;
-          const a1 = cdr1.car;
-          const cdr2 = cdr1.cdr as Cons;
-          const a2 = cdr2.car;
-          const cdr3 = cdr2.cdr as Cons;
-          const a3 = cdr3.car;
-          if (Cons.isNumber(a0) && Cons.isNumber(a1) && Cons.isNumber(a2) && Cons.isNumber(a3)) {
-            this.ctx.rect(
-              Numeric.toFloat(a0),
-              Numeric.toFloat(a1),
-              Numeric.toFloat(a2),
-              Numeric.toFloat(a3),
-            );
-            return InterpretedSymbol.of('t');
-          }
-        }
-        this.#print('Can not draw rectangle.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not draw rectangle.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not draw rectangle.', (context) => {
+      const a = this.#numbers(arguments_, 4);
+      if (a === null) return null;
+      context.rect(a[0], a[1], a[2], a[3]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gRotate(arguments_: Cons): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        if (arguments_.length() === 1 && Cons.isNumber(arguments_.car)) {
-          this.ctx.rotate((Math.PI / 180) * Numeric.toFloat(arguments_.car));
-          return InterpretedSymbol.of('t');
-        }
-        this.#print('Can not rotate.');
-        return Cons.nil;
-      } catch {
-        this.#print('Can not rotate.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not rotate.', (context) => {
+      const a = this.#numbers(arguments_, 1);
+      if (a === null) return null;
+      context.rotate((Math.PI / 180) * a[0]);
+      return InterpretedSymbol.of('t');
+    });
   }
 
   /**
@@ -1473,41 +1015,25 @@ export class GraphicsPlugin implements KeiLispPlugin {
    * state explicitly. Replaces the legacy per-method `context.save()` calls, which
    * pushed state on every draw with no matching `restore()` and grew the stack
    * unbounded.
-   * @return `t` on success, `Cons.nil` otherwise
+   * @return `t` on success
    */
   gSave(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.save();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not save.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not save.', (context) => {
+      context.save();
+      return InterpretedSymbol.of('t');
+    });
   }
 
   /**
    * Pops the most recently saved drawing state off the context's state stack.
    * Pairs with `gSave`. Popping an empty stack is a no-op per the Canvas spec.
-   * @return `t` on success, `Cons.nil` otherwise
+   * @return `t` on success
    */
   gRestore(): LispValue {
-    if (!this.checkSupport()) return Cons.nil;
-    if (this.isOpen) {
-      try {
-        this.ctx.restore();
-        return InterpretedSymbol.of('t');
-      } catch {
-        this.#print('Can not restore.');
-        return Cons.nil;
-      }
-    }
-    this.#print('The canvas is closed and cannot be executed.');
-    return Cons.nil;
+    return this.#execute('Can not restore.', (context) => {
+      context.restore();
+      return InterpretedSymbol.of('t');
+    });
   }
 
   gEllipse(arguments_: Cons): LispValue {
@@ -1843,7 +1369,8 @@ export class GraphicsPlugin implements KeiLispPlugin {
   /**
    * Parses a color spec from the head of the argument Cons. Accepts
    * (1 string), (3 numbers — rgb), or (4 numbers — rgba); falls back to
-   * `'black'` on anything else (legacy behavior).
+   * `'black'` on anything else (legacy behavior — a best-effort color parse
+   * that prints a diagnostic instead of signaling an error).
    * @param arguments_ - the argument Cons to parse
    * @return CSS color string
    */

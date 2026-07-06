@@ -60,6 +60,16 @@ console.log(plugin.name); // "graphics"
 
 See [graphics](./graphics.md) for the full list of Lisp-callable functions.
 
+### Error handling
+
+A failing `g…` call (wrong arity, type mismatch, canvas not open,
+canvas-level error) throws a kei-lisp `EvalError` from `apply`. Inside the
+interpreter this is the condition-system contract — Lisp code intercepts it
+with `(handler-case … (eval-error (e) …))`. Hosts that call
+`interpreter.evalString(...)` directly should be prepared to catch it (or
+the `KeiLispError` base class), the same as for kei-lisp's own evaluation
+errors.
+
 ### `GraphicsPlugin.functionNames()` (static)
 
 Lists every Lisp function name the plugin registers, sorted alphabetically.
