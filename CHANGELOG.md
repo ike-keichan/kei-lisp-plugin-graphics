@@ -17,7 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `gsleep` between frames). Documented in `docs/patterns.md` and shipped in
   the npm package (`files` now includes `lisp/`). Requires the kei-lisp
   fixes for plugin dispatch inside user functions and multi-form lambda
-  bodies (kei-lisp #63 / #64).
+  bodies (kei-lisp #63 / #64), so the `kei-lisp` peer dependency is
+  `^3.0.1` (this also lands the peer-range bump that the entry below
+  describes: the `^2.2.0` range had been left in `package.json` by
+  mistake).
 
 ### Changed
 

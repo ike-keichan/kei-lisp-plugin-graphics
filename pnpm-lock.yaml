@@ -63,8 +63,8 @@ importers:
         specifier: ^20.8.9
         version: 20.10.6
       kei-lisp:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.1
+        version: 3.0.1
       knip:
         specifier: ^6.24.0
         version: 6.24.0
@@ -2170,8 +2170,8 @@ packages:
     resolution: {integrity: sha512-eQQBjBnsVtGacsG9uJNB8qOr3yA8rga4wAaGG1qRcBzSIvfhERLrWxMAM1hp5fcS6Abo8M4+bUBTekYR0qTPQw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  kei-lisp@3.0.0:
-    resolution: {integrity: sha512-Hgct7IG56lV+0ieK+WAt41Qi732lAq/DizPgXJ4FEuJWcD31UeWeCYinrFrsWg4uvc1/yZ3+Vh5XadTwV1QksQ==}
+  kei-lisp@3.0.1:
+    resolution: {integrity: sha512-O8bP5RQ7LPn9VzSTniktHOWGjHr12dieARZVUta30xViQSiiu/ZRmU23nNOsDHCJuJXaAyTBS7eKsIPUgyNx4A==}
     engines: {node: '>=24.0.0'}
     hasBin: true
 
@@ -5106,7 +5106,7 @@ snapshots:
 
   jsx-ast-utils-x@0.1.0: {}
 
-  kei-lisp@3.0.0: {}
+  kei-lisp@3.0.1: {}
 
   keyv@4.5.4:
     dependencies:
