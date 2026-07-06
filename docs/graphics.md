@@ -7,6 +7,12 @@ mismatch, or canvas not open) — except the value-returning functions
 `gis-point-in-stroke`), which return their documented value on success and
 `nil` on failure.
 
+Numeric arguments accept any kei-lisp v3 number — integer, float, or exact
+rational (e.g. the result of `(/ 5 2)`) — and are converted to floats before
+they reach the Canvas API. Value-returning functions follow the v3 numeric
+tower: `gwidth` / `gheight` / `gpixel` return exact integers
+(`(integerp (gwidth))` → `t`), while `gmeasure-text` returns a float.
+
 Enum-string setters (`gline-cap`, `gline-join`, `gtext-align`,
 `gtext-baseline`, `gtext-direction`, `gcomposite`, `gfont-kerning`,
 `gfont-stretch`, `gfont-variant`, `gtext-rendering`, `gimage-smoothing`, and
@@ -23,8 +29,8 @@ hosts typically redirect this to their output panel.
 | `gclose`  | —            | Close the canvas                                                                                                   |
 | `gclear`  | — or `color` | Paint the entire canvas white, or with the given color (string / RGB / RGBA); the current `fillStyle` is preserved |
 | `greset`  | —            | Reset the context to its default state (`ctx.reset`)                                                               |
-| `gwidth`  | —            | Return the canvas width in pixels (number)                                                                         |
-| `gheight` | —            | Return the canvas height in pixels (number)                                                                        |
+| `gwidth`  | —            | Return the canvas width in pixels (integer)                                                                        |
+| `gheight` | —            | Return the canvas height in pixels (integer)                                                                       |
 | `gsleep`  | `ms: number` | Pause execution for `ms` milliseconds (busy-wait: blocks the thread and burns CPU — avoid long sleeps)             |
 
 ## Path

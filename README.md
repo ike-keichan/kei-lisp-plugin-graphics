@@ -48,6 +48,7 @@ pnpm add kei-lisp-plugin-graphics kei-lisp
 ```
 
 `kei-lisp` is a **peer dependency**; install both into your project. Requires
+**kei-lisp >= 3** (for kei-lisp 2.x use kei-lisp-plugin-graphics 3.x) and
 **Node.js >= 24** for the build toolchain (the plugin itself targets any
 environment that exposes a `CanvasRenderingContext2D`).
 
