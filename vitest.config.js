@@ -9,8 +9,8 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts'],
       reporter: ['text', 'html', 'lcov'],
-      // Floors slightly below the measured values (2026-07: 95.8 / 91.5 /
-      // 100 / 99.3) so regressions fail CI without making every small
+      // Floors slightly below the measured values (2026-07: 98.4 / 95.8 /
+      // 100 / 98.5) so regressions fail CI without making every small
       // refactor fight the last percent.
       thresholds: {
         statements: 94,

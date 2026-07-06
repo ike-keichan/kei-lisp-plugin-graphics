@@ -22,8 +22,9 @@ const server = await preview({ root, build: { outDir: outDirectory } });
 const url = server.resolvedUrls?.local[0];
 assert.ok(url, 'vite preview did not report a local URL');
 
-const browser = await chromium.launch();
+let browser;
 try {
+  browser = await chromium.launch();
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', (error) => {
@@ -51,7 +52,7 @@ try {
 
   console.log('E2E OK:', JSON.stringify(samples));
 } finally {
-  await browser.close();
+  await browser?.close();
   await new Promise((resolve, reject) => {
     server.httpServer.close((error) => (error ? reject(error) : resolve()));
   });

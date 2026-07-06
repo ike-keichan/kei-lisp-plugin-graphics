@@ -1,7 +1,12 @@
 name: Deploy Pages
 
+# Runs after the Release workflow finishes (instead of racing it on the same
+# main push) so the site never goes live for a version whose release failed.
+# Docs-only pushes still deploy: Release completes successfully as a no-op.
 on:
-  push:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -20,6 +25,7 @@ concurrency:
 jobs:
   build:
     name: Build demo + API docs
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

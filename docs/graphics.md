@@ -10,6 +10,7 @@ signal an **evaluation error** that Lisp callers can intercept with
 `handler-case`; the clause variable is bound to the error message:
 
 ```lisp
+(gopen)
 (handler-case (gfill-rect 10)
   (eval-error (e) e))            ; => "Can not draw fill rectangle."
 ```
@@ -18,8 +19,11 @@ An unhandled error aborts evaluation and is reported at the interpreter
 boundary (the REPL prints it; library callers catch it as a kei-lisp
 `EvalError`). One deliberate exception: the color-taking functions
 (`gcolor`, `gfill-color`, `gstroke-color`, `gshadow-color`, `gclear`)
-parse their color best-effort — an unrecognized color spec prints a
-diagnostic and falls back to `"black"` instead of signaling.
+parse their color best-effort — a malformed color _shape_ (wrong number
+of components, or non-numbers in an RGB/RGBA tuple) prints a diagnostic
+and falls back to `"black"` instead of signaling, and a color _string_
+is passed to the canvas as-is (the canvas silently ignores invalid
+strings and keeps the previous color).
 
 Numeric arguments accept any kei-lisp v3 number — integer, float, or exact
 rational (e.g. the result of `(/ 5 2)`) — and are converted to floats before
@@ -45,7 +49,7 @@ browser hosts typically redirect this to their output panel.
 | Function  | Arguments    | Description                                                                                                        |
 | --------- | ------------ | ------------------------------------------------------------------------------------------------------------------ |
 | `gopen`   | —            | Open the canvas (validate the 2D context, paint it white, set `isOpen` to true)                                    |
-| `gclose`  | —            | Close the canvas                                                                                                   |
+| `gclose`  | —            | Close the canvas (clears it to transparent)                                                                        |
 | `gclear`  | — or `color` | Paint the entire canvas white, or with the given color (string / RGB / RGBA); the current `fillStyle` is preserved |
 | `greset`  | —            | Reset the context to its default state (`ctx.reset`)                                                               |
 | `gwidth`  | —            | Return the canvas width in pixels (integer)                                                                        |
@@ -198,7 +202,7 @@ Reading values back — these functions return a value instead of `t`:
 
 ```lisp
 (gwidth)                         ; => 640
-(gmeasure-text "Hello")          ; => 31.5 (pixels, depends on the font)
+(gmeasure-text "Hello")          ; => 21.6 (a float; the exact value depends on the font)
 (gpixel 10 10)                   ; => (255 255 255 255)
 (gis-point-in-path 200 150)      ; => t or nil
 ```

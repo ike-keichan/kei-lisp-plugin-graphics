@@ -52,18 +52,18 @@
     "typecheck": "tsc --noEmit",
     "check": "run-s check:*",
     "check:format": "prettier \"./src/**/*.ts\" \"./examples/**/*.ts\" --check",
-    "check:format-config": "prettier \"./*.{js,mjs,json,md}\" \"./docs/**/*.md\" \"./.github/**/*.yml\" \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" --check",
+    "check:format-config": "prettier \"./*.{js,mjs,json,md}\" \"./docs/**/*.md\" \"./.github/**/*.yml\" \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" \"./examples/*.js\" \"./examples/shims/**/*.js\" --check",
     "check:knip": "knip",
     "check:lint": "eslint \"./src/**/*.ts\" \"./examples/**/*.ts\"",
-    "check:lint-config": "eslint ./*.{js,mjs} \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\"",
+    "check:lint-config": "eslint ./*.{js,mjs} \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" \"./examples/*.js\" \"./examples/shims/**/*.js\"",
     "check:package": "publint && attw --pack .",
-    "check:spell": "cspell \"./src/**/*.ts\" \"./examples/**/*.ts\"",
-    "check:spell-config": "cspell \"./*.{js,mjs,json,md}\" \"./docs/**/*.md\" \"./.github/**/*.yml\" \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\"",
+    "check:spell": "cspell \"./src/**/*.ts\" \"./examples/**/*.ts\" \"./lisp/**/*.lisp\"",
+    "check:spell-config": "cspell \"./*.{js,mjs,json,md}\" \"./docs/**/*.md\" \"./.github/**/*.yml\" \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" \"./examples/*.js\" \"./examples/shims/**/*.js\"",
     "fix": "run-s fix:*",
     "fix:format": "prettier \"./src/**/*.ts\" \"./examples/**/*.ts\" --write",
-    "fix:format-config": "prettier \"./*.{js,mjs,json,md}\" \"./docs/**/*.md\" \"./.github/**/*.yml\" \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" --write",
+    "fix:format-config": "prettier \"./*.{js,mjs,json,md}\" \"./docs/**/*.md\" \"./.github/**/*.yml\" \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" \"./examples/*.js\" \"./examples/shims/**/*.js\" --write",
     "fix:lint": "eslint \"./src/**/*.ts\" \"./examples/**/*.ts\" --fix",
-    "fix:lint-config": "eslint ./*.{js,mjs} \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" --fix"
+    "fix:lint-config": "eslint ./*.{js,mjs} \"./configs/**/*.mjs\" \"./e2e/**/*.mjs\" \"./examples/*.js\" \"./examples/shims/**/*.js\" --fix"
   },
   "peerDependencies": {
     "kei-lisp": "^3.0.1"

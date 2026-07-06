@@ -21,14 +21,15 @@ const server = await preview({ root, build: { outDir: outDirectory } });
 const url = server.resolvedUrls?.local[0];
 if (!url) throw new Error('vite preview did not report a local URL');
 
-const browser = await chromium.launch();
+let browser;
 try {
+  browser = await chromium.launch();
   const page = await browser.newPage({ deviceScaleFactor: 2 });
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.locator('#stage').screenshot({ path: output });
   console.log(`screenshot saved: ${output}`);
 } finally {
-  await browser.close();
+  await browser?.close();
   await new Promise((resolve, reject) => {
     server.httpServer.close((error) => (error ? reject(error) : resolve()));
   });
