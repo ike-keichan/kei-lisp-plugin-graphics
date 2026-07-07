@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **BREAKING: the deprecated `gtext-line` / `gtext-dire` aliases.** They
+  were kept in v3 for backward compatibility with the legacy Graphist
+  names, with removal announced for the next major release; use
+  `gtext-baseline` / `gtext-direction` instead.
+
 ### Added
+
+- **`gshadow-color` accepts the RGB / RGBA tuple forms** (`(gshadow-color
+255 0 0)`), matching the other color setters; previously it required
+  exactly one argument.
 
 - **Bundled Lisp pattern files** under `lisp/`, loadable with kei-lisp v3's
   `load` (kei-lisp roadmap follow-up, #21): `grid.lisp` (`ggrid` strokes a
@@ -18,11 +29,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the npm package (`files` now includes `lisp/`). Requires the kei-lisp
   fixes for plugin dispatch inside user functions and multi-form lambda
   bodies (kei-lisp #63 / #64), so the `kei-lisp` peer dependency is
-  `^3.0.1` (this also lands the peer-range bump that the entry below
-  describes: the `^2.2.0` range had been left in `package.json` by
-  mistake).
+  `^3.0.1`.
 
 ### Changed
+
+- **`gline-dash` rejects negative or non-finite segments.** The Canvas API
+  silently ignores such a `setLineDash` call (or, on some engines, stores
+  an invalid dash), so the plugin used to report success (`t`) for a call
+  that never took effect; it now signals an evaluation error.
+- **`gpalette` (bundled `lisp/palette.lisp`) signals on a non-integer
+  index.** A palette slot is discrete, so `(gpalette 2.5)` used to return
+  `nil` — and `(gpalette-color 2.5)` then painted black — instead of
+  reporting the bad index; it now signals an error.
+- **The zero-argument functions now enforce their arity.** `gopen` /
+  `gclose` / `gwidth` / `gheight` / `greset` / `gstart-path` /
+  `gfinish-path` / `gfill` / `gstroke` / `gclip` / `greset-transform` /
+  `gsave` / `grestore` used to silently accept (and act despite) extra
+  arguments — `(gclose 1)` really closed the canvas; they now signal an
+  evaluation error like every other function.
 
 - **BREAKING: failures signal evaluation errors instead of printing to
   stderr and returning `nil`** (kei-lisp roadmap follow-up, #21). Every
@@ -46,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replacing the per-method legacy Graphist argument destructuring; behavior
   is unchanged apart from the error signaling described above.
 - **BREAKING: requires kei-lisp >= 3.** The `kei-lisp` peer dependency was
-  bumped from `^2.2.0` to `^3.0.0` to adopt the v3 numeric tower, whose
+  bumped from `^2.2.0` to `^3.0.1` to adopt the v3 numeric tower, whose
   integers (`bigint`) and exact rationals (`Rational`) flow into plugin
   arguments. All numeric arguments are now converted with `Numeric.toFloat`
   before reaching the Canvas 2D API, so integer, float, and rational values

@@ -48,6 +48,8 @@ configs/eslint/              # Per-plugin ESLint configurations
 configs/cspell/              # cspell project dictionaries
 docs/                        # User-facing reference
 examples/                    # Runnable usage examples (browser, via Vite)
+e2e/                         # Real-browser / real-canvas end-to-end checks
+lisp/                        # Bundled Lisp pattern files (shipped in the npm package)
 ```
 
 Code modules live as `<DirName>/index.ts`. PascalCase directories are

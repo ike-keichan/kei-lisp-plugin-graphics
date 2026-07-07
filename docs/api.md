@@ -74,8 +74,7 @@ errors.
 
 Lists every Lisp function name the plugin registers, sorted alphabetically.
 Useful for hosts that want to display or autocomplete the available drawing
-functions. The list includes the deprecated aliases (`gtext-line`,
-`gtext-dire`).
+functions.
 
 ```ts
 GraphicsPlugin.functionNames();

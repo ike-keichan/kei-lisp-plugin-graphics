@@ -48,7 +48,7 @@ pnpm add kei-lisp-plugin-graphics kei-lisp
 ```
 
 `kei-lisp` is a **peer dependency**; install both into your project. Requires
-**kei-lisp >= 3** (for kei-lisp 2.x use kei-lisp-plugin-graphics 3.x) and
+**kei-lisp >= 3.0.1** (for kei-lisp 2.x use kei-lisp-plugin-graphics 3.x) and
 **Node.js >= 24** for the build toolchain (the plugin itself targets any
 environment that exposes a `CanvasRenderingContext2D`).
 
@@ -70,7 +70,7 @@ interpreter.evalString(`
   (gstroke-color "black")
   (gline-width 2)
   (gstroke-rect 10 10 120 80)
-  (gclose)
+  (gclose) ; note: gclose clears the canvas — omit it to keep the drawing visible
 `);
 ```
 
@@ -79,11 +79,9 @@ interpreter.evalString(`
 ## API
 
 ```ts
-import type { KeiLispPlugin } from 'kei-lisp';
-
 export function createGraphicsPlugin(options: {
   canvas: HTMLCanvasElement | OffscreenCanvas;
-}): KeiLispPlugin;
+}): GraphicsPlugin;
 ```
 
 The returned plugin implements the [`KeiLispPlugin`](https://github.com/ike-keichan/kei-lisp/blob/main/docs/plugins.md)
@@ -127,13 +125,13 @@ file's text and evaluate it instead. See
 
 ## Environment support
 
-| Capability                            | Browser (`HTMLCanvasElement`)                            | `OffscreenCanvas` (worker) | Node.js (e.g. `@napi-rs/canvas`) |
-| ------------------------------------- | -------------------------------------------------------- | -------------------------- | -------------------------------- |
-| Drawing primitives (`g…`)             | ✅                                                       | ✅                         | ✅                               |
-| `gimage` / `gpattern` (image loading) | ✅                                                       | ⚠️ needs a global `Image`  | ❌ returns `nil`                 |
-| `gsave-png` / `gsave-jpeg` (download) | ✅                                                       | ❌ returns `nil`           | ❌ returns `nil`                 |
-| `gsave-png` / `gsave-jpeg` (`path`)   | ❌ returns `nil`                                         | ⚠️ async `convertToBlob`   | ✅                               |
-| Diagnostics                           | `console.error` (or host-provided `process.stderr` shim) | same                       | `process.stderr`                 |
+| Capability                            | Browser (`HTMLCanvasElement`)                            | `OffscreenCanvas` (worker)                        | Node.js (e.g. `@napi-rs/canvas`) |
+| ------------------------------------- | -------------------------------------------------------- | ------------------------------------------------- | -------------------------------- |
+| Drawing primitives (`g…`)             | ✅                                                       | ✅                                                | ✅                               |
+| `gimage` / `gpattern` (image loading) | ✅                                                       | ⚠️ needs a global `Image`                         | ❌ signals an error              |
+| `gsave-png` / `gsave-jpeg` (download) | ✅                                                       | ❌ signals an error                               | ❌ signals an error              |
+| `gsave-png` / `gsave-jpeg` (`path`)   | ❌ signals an error                                      | ⚠️ needs Node's `process` (async `convertToBlob`) | ✅                               |
+| Diagnostics                           | `console.error` (or host-provided `process.stderr` shim) | same                                              | `process.stderr`                 |
 
 ## Reference
 

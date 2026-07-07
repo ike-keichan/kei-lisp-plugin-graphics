@@ -30,10 +30,10 @@ the file's text yourself and evaluate it (e.g. with
 
 ## `lisp/palette.lisp`
 
-| Function         | Arguments    | Description                                                                  |
-| ---------------- | ------------ | ---------------------------------------------------------------------------- |
-| `gpalette`       | `n: integer` | Return the `n`-th palette color string (0-based, wraps around the 8 entries) |
-| `gpalette-color` | `n: integer` | Set both fill and stroke color to the `n`-th palette color                   |
+| Function         | Arguments    | Description                                                                                                        |
+| ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `gpalette`       | `n: integer` | Return the `n`-th palette color string (0-based, wraps around the 8 entries; a non-integer index signals an error) |
+| `gpalette-color` | `n: integer` | Set both fill and stroke color to the `n`-th palette color                                                         |
 
 The palette is an 8-color categorical palette (a Tableau 10 subset), bound
 to `*gpalette*`:

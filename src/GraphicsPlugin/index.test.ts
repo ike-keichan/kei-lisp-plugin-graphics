@@ -298,11 +298,11 @@ describe('GraphicsPlugin', () => {
       expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
     });
 
-    it('includes the deprecated aliases alongside the new names', () => {
+    it('no longer lists the legacy Graphist aliases removed in v4', () => {
       const names = GraphicsPlugin.functionNames();
-      expect(names).toEqual(
-        expect.arrayContaining(['gtext-dire', 'gtext-direction', 'gtext-line', 'gtext-baseline']),
-      );
+      expect(names).toEqual(expect.arrayContaining(['gtext-direction', 'gtext-baseline']));
+      expect(names).not.toContain('gtext-dire');
+      expect(names).not.toContain('gtext-line');
     });
   });
 
@@ -632,7 +632,7 @@ describe('GraphicsPlugin', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const result = plugin.apply(
-        InterpretedSymbol.of('gtext-dire'),
+        InterpretedSymbol.of('gtext-direction'),
         arguments_(direction),
         makeContext(),
       );
@@ -644,7 +644,7 @@ describe('GraphicsPlugin', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       expectSignals(() =>
-        plugin.apply(InterpretedSymbol.of('gtext-dire'), arguments_(1), makeContext()),
+        plugin.apply(InterpretedSymbol.of('gtext-direction'), arguments_(1), makeContext()),
       );
     });
   });
@@ -903,6 +903,12 @@ describe('GraphicsPlugin', () => {
       expect(ctx.setLineDash).toHaveBeenCalledWith([]);
     });
 
+    it('gline-dash signals an EvalError for a negative segment instead of a no-op success', () => {
+      const { plugin, ctx } = openPlugin();
+      expectSignals(() => call(plugin, 'gline-dash', 6, -4), 'Can not set line dash.');
+      expect(ctx.setLineDash).not.toHaveBeenCalled();
+    });
+
     it('gline-dash-offset and gmiter-limit write their properties', () => {
       const { plugin, ctx } = openPlugin();
       call(plugin, 'gline-dash-offset', 4);
@@ -984,6 +990,18 @@ describe('GraphicsPlugin', () => {
       expect(ctx.fontStretch).toBe('condensed');
       expect(ctx.fontVariantCaps).toBe('small-caps');
       expect(ctx.textRendering).toBe('geometricPrecision');
+    });
+
+    it('gshadow-color accepts a 3-number RGB tuple like the other color setters', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gshadow-color', 255, 0, 0)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.shadowColor).toBe('rgb(255, 0, 0)');
+    });
+
+    it('gshadow-color accepts a 4-number RGBA tuple', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gshadow-color', 255, 0, 0, 0.5)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.shadowColor).toBe('rgba(255, 0, 0, 0.5)');
     });
 
     it('gclear-rect forwards to ctx.clearRect', () => {
@@ -1186,20 +1204,18 @@ describe('GraphicsPlugin', () => {
   });
 
   describe('API design cleanups (#32)', () => {
-    it('gtext-direction is the primary name and gtext-dire still works as an alias', () => {
+    it('gtext-direction works and the removed gtext-dire alias is not claimed', () => {
       const { plugin, ctx } = openPlugin();
       expect(call(plugin, 'gtext-direction', 'rtl')).toBe(InterpretedSymbol.of('t'));
       expect(ctx.direction).toBe('rtl');
-      expect(call(plugin, 'gtext-dire', 'ltr')).toBe(InterpretedSymbol.of('t'));
-      expect(ctx.direction).toBe('ltr');
+      expect(plugin.has(InterpretedSymbol.of('gtext-dire'))).toBe(false);
     });
 
-    it('gtext-baseline is the primary name and gtext-line still works as an alias', () => {
+    it('gtext-baseline works and the removed gtext-line alias is not claimed', () => {
       const { plugin, ctx } = openPlugin();
       expect(call(plugin, 'gtext-baseline', 'middle')).toBe(InterpretedSymbol.of('t'));
       expect(ctx.textBaseline).toBe('middle');
-      expect(call(plugin, 'gtext-line', 'top')).toBe(InterpretedSymbol.of('t'));
-      expect(ctx.textBaseline).toBe('top');
+      expect(plugin.has(InterpretedSymbol.of('gtext-line'))).toBe(false);
     });
 
     it('gpattern accepts a string repetition keyword', () => {
@@ -1275,9 +1291,9 @@ describe('GraphicsPlugin', () => {
         { name: 'gstroke-text', args: [42, 1, 2] },
         { name: 'gstroke-tri', args: [1, 2, 3, 4, 5, 'x'] },
         { name: 'gtext-align', args: [1] },
-        { name: 'gtext-dire', args: [1] },
+        { name: 'gtext-direction', args: [1] },
         { name: 'gtext-font', args: [1] },
-        { name: 'gtext-line', args: [1] },
+        { name: 'gtext-baseline', args: [1] },
         { name: 'gtranslate', args: [1, 'x'] },
         { name: 'grect', args: [1, 2, 3, 'x'] },
         { name: 'grotate', args: ['x'] },
@@ -1354,9 +1370,9 @@ describe('GraphicsPlugin', () => {
         { name: 'gstroke-text', args: ['a', 1] },
         { name: 'gstroke-tri', args: [1, 2, 3, 4, 5] },
         { name: 'gtext-align', args: ['left', 'right'] },
-        { name: 'gtext-dire', args: ['ltr', 'rtl'] },
+        { name: 'gtext-direction', args: ['ltr', 'rtl'] },
         { name: 'gtext-font', args: ['a', 'b'] },
-        { name: 'gtext-line', args: ['top', 'middle'] },
+        { name: 'gtext-baseline', args: ['top', 'middle'] },
         { name: 'gtranslate', args: [1] },
         { name: 'grect', args: [1, 2, 3] },
         { name: 'grotate', args: [1, 2] },
@@ -1391,6 +1407,37 @@ describe('GraphicsPlugin', () => {
           );
         },
       );
+
+      const zeroArgumentNames = [
+        'gclip',
+        'gfill',
+        'gfinish-path',
+        'gheight',
+        'greset',
+        'greset-transform',
+        'grestore',
+        'gsave',
+        'gstart-path',
+        'gstroke',
+        'gwidth',
+      ];
+
+      it.each(zeroArgumentNames)('%s signals an EvalError when given any argument', (name) => {
+        const { plugin } = openPlugin();
+        expectSignals(() => call(plugin, name, 1));
+      });
+
+      it('gopen with an argument signals and leaves the canvas closed', () => {
+        const { plugin } = makePlugin();
+        expectSignals(() => call(plugin, 'gopen', 1), 'Can not open.');
+        expect(plugin.isOpen).toBe(false);
+      });
+
+      it('gclose with an argument signals and leaves the canvas open', () => {
+        const { plugin } = openPlugin();
+        expectSignals(() => call(plugin, 'gclose', 1), 'Can not close.');
+        expect(plugin.isOpen).toBe(true);
+      });
     });
   });
 
@@ -1520,6 +1567,33 @@ describe('GraphicsPlugin', () => {
         );
       } finally {
         vi.unstubAllGlobals();
+      }
+    });
+
+    it('gsave-png with a path signals an EvalError in a plain browser with no process shim', () => {
+      const { plugin } = openPlugin();
+      const pathArguments = arguments_('never-written.png');
+      vi.stubGlobal('process', undefined);
+      try {
+        expectSignals(
+          () => plugin.gSavePng(pathArguments),
+          'Can not save png. Saving to a file path requires Node.js.',
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('gsave-png prints a diagnostic when the async OffscreenCanvas write fails', async () => {
+      const plugin = makeOffscreenPlugin(() => Promise.reject(new Error('encode failed')));
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        expect(call(plugin, 'gsave-png', 'never-written.png')).toBe(InterpretedSymbol.of('t'));
+        await vi.waitFor(() => {
+          expect(spy).toHaveBeenCalledWith('Can not save png.\n');
+        });
+      } finally {
+        spy.mockRestore();
       }
     });
 

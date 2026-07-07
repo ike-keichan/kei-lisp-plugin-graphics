@@ -13,14 +13,14 @@ body:
     attributes:
       label: kei-lisp-plugin-graphics version
       description: Output of `npm ls kei-lisp-plugin-graphics`, or the version in your lockfile.
-      placeholder: e.g. 1.1.0
+      placeholder: e.g. 4.0.0
     validations:
       required: true
   - type: input
     id: kei-lisp-version
     attributes:
       label: kei-lisp version
-      placeholder: e.g. 2.2.0
+      placeholder: e.g. 3.0.1
     validations:
       required: true
   - type: input
@@ -53,7 +53,7 @@ body:
     id: actual
     attributes:
       label: Actual behavior
-      description: What happened instead? Include any diagnostic output (the plugin writes messages to stderr).
+      description: What happened instead? Include the signaled error message, or any diagnostic the plugin wrote to stderr.
     validations:
       required: true
   - type: textarea
