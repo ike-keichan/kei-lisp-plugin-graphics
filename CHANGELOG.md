@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-07-07
+
+### Removed
+
+- **BREAKING: the deprecated `gtext-line` / `gtext-dire` aliases.** They
+  were kept in v3 for backward compatibility with the legacy Graphist
+  names, with removal announced for the next major release; use
+  `gtext-baseline` / `gtext-direction` instead.
+
+### Added
+
+- **`gshadow-color` accepts the RGB / RGBA tuple forms** (`(gshadow-color
+255 0 0)`), matching the other color setters; previously it required
+  exactly one argument.
+
+- **Bundled Lisp pattern files** under `lisp/`, loadable with kei-lisp v3's
+  `load` (kei-lisp roadmap follow-up, #21): `grid.lisp` (`ggrid` strokes a
+  grid across the canvas), `palette.lisp` (`gpalette` / `gpalette-color`,
+  an 8-color categorical palette with wrap-around indexing), and
+  `animation.lisp` (`ganimate` runs a frame loop over a draw lambda with
+  `gsleep` between frames). Documented in `docs/patterns.md` and shipped in
+  the npm package (`files` now includes `lisp/`). Requires the kei-lisp
+  fixes for plugin dispatch inside user functions and multi-form lambda
+  bodies (kei-lisp #63 / #64), so the `kei-lisp` peer dependency is
+  `^3.0.1`.
+
+### Changed
+
+- **`gline-dash` rejects negative or non-finite segments.** The Canvas API
+  silently ignores such a `setLineDash` call (or, on some engines, stores
+  an invalid dash), so the plugin used to report success (`t`) for a call
+  that never took effect; it now signals an evaluation error.
+- **`gpalette` (bundled `lisp/palette.lisp`) signals on a non-integer
+  index.** A palette slot is discrete, so `(gpalette 2.5)` used to return
+  `nil` — and `(gpalette-color 2.5)` then painted black — instead of
+  reporting the bad index; it now signals an error.
+- **The zero-argument functions now enforce their arity.** `gopen` /
+  `gclose` / `gwidth` / `gheight` / `greset` / `gstart-path` /
+  `gfinish-path` / `gfill` / `gstroke` / `gclip` / `greset-transform` /
+  `gsave` / `grestore` used to silently accept (and act despite) extra
+  arguments — `(gclose 1)` really closed the canvas; they now signal an
+  evaluation error like every other function.
+
+- **BREAKING: failures signal evaluation errors instead of printing to
+  stderr and returning `nil`** (kei-lisp roadmap follow-up, #21). Every
+  synchronous failure — wrong arity, type mismatch, canvas not open /
+  already open, unsupported canvas, canvas-level exceptions, save failures —
+  now throws a kei-lisp `EvalError` carrying the same message that used to
+  be printed. Lisp callers intercept it with
+  `(handler-case … (eval-error (e) …))` (kei-lisp >= 3 condition system);
+  unhandled errors abort evaluation and reach library callers as an
+  `EvalError`. Diagnostics from asynchronous work (image loading,
+  `OffscreenCanvas` file writes) and `gopen`'s informational size line still
+  go to `process.stderr`, and `selectColor`'s best-effort black fallback is
+  unchanged.
+- **BREAKING (TypeScript API): `checkSupport()` was removed.** The
+  null-context check is folded into the private guard that every `g…`
+  method runs; an unusable canvas now signals an `EvalError` ("Unable to
+  initialize canvas. …") instead of printing and returning `nil`.
+- A failed `gopen` (the initial clear threw) no longer leaves the canvas
+  marked open, so a later `gopen` can retry.
+- The `g…` handlers now share one guard-and-dispatch skeleton (`#execute`),
+  replacing the per-method legacy Graphist argument destructuring; behavior
+  is unchanged apart from the error signaling described above.
+- **BREAKING: requires kei-lisp >= 3.** The `kei-lisp` peer dependency was
+  bumped from `^2.2.0` to `^3.0.1` to adopt the v3 numeric tower, whose
+  integers (`bigint`) and exact rationals (`Rational`) flow into plugin
+  arguments. All numeric arguments are now converted with `Numeric.toFloat`
+  before reaching the Canvas 2D API, so integer, float, and rational values
+  (e.g. `(gfill-rect (/ 5 2) 10 50 30)`) all draw correctly.
+- **`gwidth` / `gheight` / `gpixel` return exact integers.** Their
+  integer-valued results are now kei-lisp v3 integers (`bigint`), so
+  `(integerp (gwidth))` → `t` and `(/ (gwidth) 2)` stays exact.
+  `gmeasure-text` still returns a float.
+
 ## [3.0.1] - 2026-07-05
 
 ### Changed
@@ -269,7 +344,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`'The canvas has already been opened.'`) due to a copy-paste from
   `gOpen`'s double-open guard.
 
-[unreleased]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.1...HEAD
+[unreleased]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.1...v4.0.0
 [3.0.1]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/ike-keichan/kei-lisp-plugin-graphics/compare/v1.1.0...v2.0.0

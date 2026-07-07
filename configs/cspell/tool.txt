@@ -9,6 +9,7 @@ prepublish
 # ビルドツール
 tsdown
 rolldown
+sandboxing
 shims
 sourcemap
 vite

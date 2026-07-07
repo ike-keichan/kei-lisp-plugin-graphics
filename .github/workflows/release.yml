@@ -22,7 +22,7 @@ jobs:
       should-release: ${{ steps.decide.outputs.should-release }}
       version: ${{ steps.decide.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0 # tags must be available for the existence check
 
@@ -45,13 +45,13 @@ jobs:
     if: needs.check.outputs.should-release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version-file: .node-version
           cache: 'pnpm'
@@ -70,18 +70,40 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Both steps below are idempotent so that a partially failed run can be
+      # recovered with "Re-run failed jobs" (e.g. the publish succeeded but
+      # the tag push failed) instead of hard-failing on the duplicate.
+      # npm view exits non-zero (E404) for a missing version on npm >= 8.13,
+      # which .node-version guarantees here; a transient registry failure
+      # falls through to publish, where the registry rejects duplicates.
       - name: Publish to npm
-        run: pnpm publish --provenance --access public --no-git-checks
+        run: |
+          version="${{ needs.check.outputs.version }}"
+          if npm view "kei-lisp-plugin-graphics@$version" version >/dev/null 2>&1; then
+            echo "$version is already on npm — skipping publish."
+          else
+            pnpm publish --provenance --access public --no-git-checks
+          fi
 
+      # Checked against origin (ls-remote) because this job's shallow
+      # checkout does not fetch tags, so a local rev-parse can never see one.
       - name: Create and push tag
         run: |
-          git tag "v${{ needs.check.outputs.version }}"
-          git push origin "v${{ needs.check.outputs.version }}"
+          version="${{ needs.check.outputs.version }}"
+          if git ls-remote --exit-code origin "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "Tag v$version already exists on origin — skipping."
+          else
+            git tag "v$version"
+            git push origin "v$version"
+          fi
 
       - name: Extract release notes from CHANGELOG
         run: |
           version="${{ needs.check.outputs.version }}"
-          awk -v ver="$version" '
+          # Escape regex-special characters (notably the dots in 1.2.3) so
+          # the section header matches literally, not as a wildcard pattern.
+          escaped=$(printf '%s' "$version" | sed 's/[.[\*^$]/\\&/g')
+          awk -v ver="$escaped" '
             $0 ~ ("^## \\[" ver "\\]") { flag = 1; next }
             /^## \[/ { if (flag) exit }
             flag { print }
@@ -89,7 +111,7 @@ jobs:
           echo "Extracted $(wc -l < release-notes.md) lines of notes for $version"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           tag_name: v${{ needs.check.outputs.version }}
           body_path: release-notes.md

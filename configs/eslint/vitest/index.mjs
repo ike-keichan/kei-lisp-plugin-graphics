@@ -13,6 +13,8 @@ export const vitestConfigs = [
     plugins: { vitest: pluginVitest },
     rules: {
       ...pluginVitest.configs.recommended.rules,
+      // expectSignals (EvalError 検証ヘルパ) をアサーションとして認識させる
+      'vitest/expect-expect': [ERROR, { assertFunctionNames: ['expect', 'expectSignals'] }],
       // .only の残存を禁止（CI 全体に影響するため）
       'vitest/no-focused-tests': ERROR,
       // .skip の残存を警告

@@ -5,7 +5,14 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LispValue, PluginContext } from 'kei-lisp';
-import { Cons, InterpretedSymbol, LispInterpreter, StreamManager } from 'kei-lisp';
+import {
+  Cons,
+  EvalError,
+  InterpretedSymbol,
+  LispInterpreter,
+  Rational,
+  StreamManager,
+} from 'kei-lisp';
 
 import { createGraphicsPlugin } from '../index.js';
 import { GraphicsPlugin } from './index.js';
@@ -218,6 +225,24 @@ function call(plugin: GraphicsPlugin, name: string, ...values: LispValue[]): Lis
   return plugin.apply(InterpretedSymbol.of(name), arguments_(...values), makeContext());
 }
 
+/**
+ * Asserts that `action` signals a kei-lisp EvalError, optionally carrying the
+ * given message (the condition-system contract: Lisp callers intercept it
+ * with `(handler-case … (eval-error (e) …))`).
+ */
+function expectSignals(action: () => unknown, message?: string): void {
+  let thrown: unknown;
+  try {
+    action();
+  } catch (error) {
+    thrown = error;
+  }
+  expect(thrown).toBeInstanceOf(EvalError);
+  if (message !== undefined) {
+    expect((thrown as EvalError).message).toContain(message);
+  }
+}
+
 describe('GraphicsPlugin', () => {
   describe('constructor', () => {
     it('binds the given canvas', () => {
@@ -255,10 +280,12 @@ describe('GraphicsPlugin', () => {
       expect(result).toBe(InterpretedSymbol.of('t'));
     });
 
-    it('returns nil for an unregistered symbol (legacy: prints + returns nil)', () => {
+    it('signals an EvalError for an unregistered symbol', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('unknown-fn'), Cons.nil, makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(
+        () => plugin.apply(InterpretedSymbol.of('unknown-fn'), Cons.nil, makeContext()),
+        'I could find no procedure description for unknown-fn',
+      );
     });
   });
 
@@ -271,21 +298,24 @@ describe('GraphicsPlugin', () => {
       expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
     });
 
-    it('includes the deprecated aliases alongside the new names', () => {
+    it('no longer lists the legacy Graphist aliases removed in v4', () => {
       const names = GraphicsPlugin.functionNames();
-      expect(names).toEqual(
-        expect.arrayContaining(['gtext-dire', 'gtext-direction', 'gtext-line', 'gtext-baseline']),
-      );
+      expect(names).toEqual(expect.arrayContaining(['gtext-direction', 'gtext-baseline']));
+      expect(names).not.toContain('gtext-dire');
+      expect(names).not.toContain('gtext-line');
     });
   });
 
-  describe('#print (via closed-canvas path)', () => {
-    it('writes the line plus a newline to process.stderr', () => {
+  describe('closed-canvas signaling', () => {
+    it('signals an EvalError before gopen instead of printing', () => {
       const { plugin } = makePlugin();
       const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
       try {
-        plugin.gAlpha(arguments_(0));
-        expect(spy).toHaveBeenCalledWith('The canvas is closed and cannot be executed.\n');
+        expectSignals(
+          () => plugin.gAlpha(arguments_(0)),
+          'The canvas is closed and cannot be executed.',
+        );
+        expect(spy).not.toHaveBeenCalled();
       } finally {
         spy.mockRestore();
       }
@@ -305,11 +335,13 @@ describe('GraphicsPlugin', () => {
       expect(result).toBe(InterpretedSymbol.of('t'));
     });
 
-    it('returns nil when the canvas is already open (legacy: print + nil)', () => {
+    it('signals an EvalError when the canvas is already open', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const second = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      expect(second).toBe(Cons.nil);
+      expectSignals(
+        () => plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext()),
+        'The canvas has already been opened.',
+      );
     });
 
     it('prints the actual canvas dimensions', () => {
@@ -332,10 +364,12 @@ describe('GraphicsPlugin', () => {
       expect(plugin.isOpen).toBe(false);
     });
 
-    it('returns nil when the canvas is already closed', () => {
+    it('signals an EvalError when the canvas is already closed', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('gclose'), Cons.nil, makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(
+        () => plugin.apply(InterpretedSymbol.of('gclose'), Cons.nil, makeContext()),
+        'The canvas has already been closed.',
+      );
     });
   });
 
@@ -349,10 +383,12 @@ describe('GraphicsPlugin', () => {
       expect(spy).toHaveBeenCalledWith(0, 0, 800, 600);
     });
 
-    it('returns nil when the canvas is not open', () => {
+    it('signals an EvalError when the canvas is not open', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('gclear'), Cons.nil, makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(
+        () => plugin.apply(InterpretedSymbol.of('gclear'), Cons.nil, makeContext()),
+        'The canvas is closed and cannot be executed.',
+      );
     });
   });
 
@@ -365,11 +401,13 @@ describe('GraphicsPlugin', () => {
       expect(spy).toHaveBeenCalledWith(10, 20);
     });
 
-    it('returns nil on wrong arity (legacy: print + nil)', () => {
+    it('signals an EvalError on wrong arity', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const result = plugin.apply(InterpretedSymbol.of('gmove-to'), arguments_(10), makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(
+        () => plugin.apply(InterpretedSymbol.of('gmove-to'), arguments_(10), makeContext()),
+        'Can not move',
+      );
     });
   });
 
@@ -382,11 +420,13 @@ describe('GraphicsPlugin', () => {
       expect(spy).toHaveBeenCalledWith(30, 40);
     });
 
-    it('returns nil on wrong arity', () => {
+    it('signals an EvalError on wrong arity', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const result = plugin.apply(InterpretedSymbol.of('gline-to'), arguments_(30), makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(
+        () => plugin.apply(InterpretedSymbol.of('gline-to'), arguments_(30), makeContext()),
+        'Can not draw line to',
+      );
     });
   });
 
@@ -399,6 +439,19 @@ describe('GraphicsPlugin', () => {
       plugin.apply(InterpretedSymbol.of('gfill-rect'), arguments_(10, 20, 100, 50), makeContext());
       expect(spy).toHaveBeenCalledWith(10, 20, 100, 50);
     });
+
+    it('converts bigint and Rational arguments (v3 numeric tower) to floats', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      const spy = vi.spyOn(plugin.ctx as CanvasRenderingContext2D, 'fillRect');
+      spy.mockClear();
+      plugin.apply(
+        InterpretedSymbol.of('gfill-rect'),
+        arguments_(10n, new Rational(41n, 2n), 100n, 50n),
+        makeContext(),
+      );
+      expect(spy).toHaveBeenCalledWith(10, 20.5, 100, 50);
+    });
   });
 
   describe('gFillText', () => {
@@ -410,15 +463,14 @@ describe('GraphicsPlugin', () => {
       expect(spy).toHaveBeenCalledWith('hello', 5, 15);
     });
 
-    it('returns nil when first argument is not a string', () => {
+    it('signals an EvalError when first argument is not a string', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const result = plugin.apply(
-        InterpretedSymbol.of('gfill-text'),
-        arguments_(42, 5, 15),
-        makeContext(),
+      expectSignals(
+        () =>
+          plugin.apply(InterpretedSymbol.of('gfill-text'), arguments_(42, 5, 15), makeContext()),
+        'Can not draw fill text.',
       );
-      expect(result).toBe(Cons.nil);
     });
   });
 
@@ -522,6 +574,13 @@ describe('GraphicsPlugin', () => {
       plugin.apply(InterpretedSymbol.of('galpha'), arguments_(5), makeContext());
       expect((plugin.ctx as CanvasRenderingContext2D).globalAlpha).toBe(1);
     });
+
+    it('clamps bigint arguments after conversion', () => {
+      const { plugin } = makePlugin();
+      plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+      plugin.apply(InterpretedSymbol.of('galpha'), arguments_(5n), makeContext());
+      expect((plugin.ctx as CanvasRenderingContext2D).globalAlpha).toBe(1);
+    });
   });
 
   describe('gLineCap', () => {
@@ -537,11 +596,12 @@ describe('GraphicsPlugin', () => {
       expect((plugin.ctx as CanvasRenderingContext2D).lineCap).toBe(cap);
     });
 
-    it('returns nil for a number argument (legacy flag no longer accepted)', () => {
+    it('signals an EvalError for a number argument (legacy flag no longer accepted)', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const result = plugin.apply(InterpretedSymbol.of('gline-cap'), arguments_(1), makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(() =>
+        plugin.apply(InterpretedSymbol.of('gline-cap'), arguments_(1), makeContext()),
+      );
     });
   });
 
@@ -558,11 +618,12 @@ describe('GraphicsPlugin', () => {
       expect((plugin.ctx as CanvasRenderingContext2D).lineJoin).toBe(join);
     });
 
-    it('returns nil for a number argument (legacy flag no longer accepted)', () => {
+    it('signals an EvalError for a number argument (legacy flag no longer accepted)', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const result = plugin.apply(InterpretedSymbol.of('gline-join'), arguments_(0), makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(() =>
+        plugin.apply(InterpretedSymbol.of('gline-join'), arguments_(0), makeContext()),
+      );
     });
   });
 
@@ -571,7 +632,7 @@ describe('GraphicsPlugin', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
       const result = plugin.apply(
-        InterpretedSymbol.of('gtext-dire'),
+        InterpretedSymbol.of('gtext-direction'),
         arguments_(direction),
         makeContext(),
       );
@@ -579,11 +640,12 @@ describe('GraphicsPlugin', () => {
       expect((plugin.ctx as CanvasRenderingContext2D).direction).toBe(direction);
     });
 
-    it('returns nil for a number argument (legacy flag no longer accepted)', () => {
+    it('signals an EvalError for a number argument (legacy flag no longer accepted)', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const result = plugin.apply(InterpretedSymbol.of('gtext-dire'), arguments_(1), makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(() =>
+        plugin.apply(InterpretedSymbol.of('gtext-direction'), arguments_(1), makeContext()),
+      );
     });
   });
 
@@ -609,16 +671,13 @@ describe('GraphicsPlugin', () => {
       expect(spy).toHaveBeenCalledWith('hello', 10, 20);
     });
 
-    it('emits "Can not draw stroke text." on failure', () => {
+    it('signals "Can not draw stroke text." on failure', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
-      try {
-        plugin.apply(InterpretedSymbol.of('gstroke-text'), arguments_(10, 20), makeContext());
-        expect(spy).toHaveBeenCalledWith('Can not draw stroke text.\n');
-      } finally {
-        spy.mockRestore();
-      }
+      expectSignals(
+        () => plugin.apply(InterpretedSymbol.of('gstroke-text'), arguments_(10, 20), makeContext()),
+        'Can not draw stroke text.',
+      );
     });
   });
 
@@ -643,10 +702,9 @@ describe('GraphicsPlugin', () => {
       expect(result).toBe(InterpretedSymbol.of('t'));
     });
 
-    it('returns nil when the canvas is not open', () => {
+    it('signals an EvalError when the canvas is not open', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('gsave'), Cons.nil, makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(() => plugin.apply(InterpretedSymbol.of('gsave'), Cons.nil, makeContext()));
     });
   });
 
@@ -660,10 +718,9 @@ describe('GraphicsPlugin', () => {
       expect(result).toBe(InterpretedSymbol.of('t'));
     });
 
-    it('returns nil when the canvas is not open', () => {
+    it('signals an EvalError when the canvas is not open', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('grestore'), Cons.nil, makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(() => plugin.apply(InterpretedSymbol.of('grestore'), Cons.nil, makeContext()));
     });
   });
 
@@ -733,15 +790,18 @@ describe('GraphicsPlugin', () => {
       expect(result).toBe(InterpretedSymbol.of('t'));
     });
 
-    it('returns nil for wrong arity', () => {
+    it('signals an EvalError for wrong arity', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const result = plugin.apply(
-        InterpretedSymbol.of('gimage'),
-        arguments_('https://example.test/img.png', 10),
-        makeContext(),
+      expectSignals(
+        () =>
+          plugin.apply(
+            InterpretedSymbol.of('gimage'),
+            arguments_('https://example.test/img.png', 10),
+            makeContext(),
+          ),
+        'Can not draw Image.',
       );
-      expect(result).toBe(Cons.nil);
     });
   });
 
@@ -789,27 +849,30 @@ describe('GraphicsPlugin', () => {
       }
     });
 
-    it('returns nil for a non-string argument', () => {
+    it('signals an EvalError for a non-string argument', () => {
       const { plugin } = makePlugin();
       plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      const result = plugin.apply(InterpretedSymbol.of('gsave-png'), arguments_(1), makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(
+        () => plugin.apply(InterpretedSymbol.of('gsave-png'), arguments_(1), makeContext()),
+        'Can not save png.',
+      );
     });
 
-    it('returns nil when the canvas is not open', () => {
+    it('signals an EvalError when the canvas is not open', () => {
       const { plugin } = makePlugin();
-      const result = plugin.apply(InterpretedSymbol.of('gsave-png'), Cons.nil, makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(() => plugin.apply(InterpretedSymbol.of('gsave-png'), Cons.nil, makeContext()));
     });
   });
 
-  describe('checkSupport', () => {
-    it('returns nil from any g* method when ctx is null', () => {
+  describe('unsupported canvas (ctx is null)', () => {
+    it('signals an EvalError from any g* method', () => {
       const canvas = document.createElement('canvas');
       vi.spyOn(canvas, 'getContext').mockReturnValue(null);
       const plugin = new GraphicsPlugin(canvas);
-      const result = plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-      expect(result).toBe(Cons.nil);
+      expectSignals(
+        () => plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext()),
+        'Unable to initialize canvas.',
+      );
     });
   });
 
@@ -838,6 +901,12 @@ describe('GraphicsPlugin', () => {
       const { plugin, ctx } = openPlugin();
       call(plugin, 'gline-dash');
       expect(ctx.setLineDash).toHaveBeenCalledWith([]);
+    });
+
+    it('gline-dash signals an EvalError for a negative segment instead of a no-op success', () => {
+      const { plugin, ctx } = openPlugin();
+      expectSignals(() => call(plugin, 'gline-dash', 6, -4), 'Can not set line dash.');
+      expect(ctx.setLineDash).not.toHaveBeenCalled();
     });
 
     it('gline-dash-offset and gmiter-limit write their properties', () => {
@@ -896,9 +965,9 @@ describe('GraphicsPlugin', () => {
       expect(ctx.imageSmoothingQuality).toBe('high');
     });
 
-    it('gimage-smoothing rejects an unknown keyword', () => {
+    it('gimage-smoothing signals an EvalError for an unknown keyword', () => {
       const { plugin } = openPlugin();
-      expect(call(plugin, 'gimage-smoothing', 'bogus')).toBe(Cons.nil);
+      expectSignals(() => call(plugin, 'gimage-smoothing', 'bogus'));
     });
 
     it('gmeasure-text returns the measured width as a number', () => {
@@ -923,6 +992,18 @@ describe('GraphicsPlugin', () => {
       expect(ctx.textRendering).toBe('geometricPrecision');
     });
 
+    it('gshadow-color accepts a 3-number RGB tuple like the other color setters', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gshadow-color', 255, 0, 0)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.shadowColor).toBe('rgb(255, 0, 0)');
+    });
+
+    it('gshadow-color accepts a 4-number RGBA tuple', () => {
+      const { plugin, ctx } = openPlugin();
+      expect(call(plugin, 'gshadow-color', 255, 0, 0, 0.5)).toBe(InterpretedSymbol.of('t'));
+      expect(ctx.shadowColor).toBe('rgba(255, 0, 0, 0.5)');
+    });
+
     it('gclear-rect forwards to ctx.clearRect', () => {
       const { plugin, ctx } = openPlugin();
       call(plugin, 'gclear-rect', 1, 2, 3, 4);
@@ -935,10 +1016,10 @@ describe('GraphicsPlugin', () => {
       expect(ctx.reset).toHaveBeenCalledTimes(1);
     });
 
-    it('gwidth and gheight return the canvas dimensions', () => {
+    it('gwidth and gheight return the canvas dimensions as v3 integers (bigint)', () => {
       const { plugin } = openPlugin();
-      expect(call(plugin, 'gwidth')).toBe(800);
-      expect(call(plugin, 'gheight')).toBe(600);
+      expect(call(plugin, 'gwidth')).toBe(800n);
+      expect(call(plugin, 'gheight')).toBe(600n);
     });
 
     it('gpixel returns an (r g b a) list', () => {
@@ -974,9 +1055,9 @@ describe('GraphicsPlugin', () => {
       expect(ctx.strokeStyle).toBe(gradient);
     });
 
-    it('glinear-gradient rejects an odd number of stop values', () => {
+    it('glinear-gradient signals an EvalError for an odd number of stop values', () => {
       const { plugin } = openPlugin();
-      expect(call(plugin, 'glinear-gradient', 0, 0, 100, 0, 0, 'red', 1)).toBe(Cons.nil);
+      expectSignals(() => call(plugin, 'glinear-gradient', 0, 0, 100, 0, 0, 'red', 1));
     });
 
     it('gradial-gradient forwards both circles', () => {
@@ -1092,8 +1173,8 @@ describe('GraphicsPlugin', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       vi.stubGlobal('process', undefined);
       try {
-        plugin.gAlpha(arguments_(0));
-        expect(consoleSpy).toHaveBeenCalledWith('The canvas is closed and cannot be executed.');
+        plugin.gOpen();
+        expect(consoleSpy).toHaveBeenCalledWith('canvas size, width : 800 height : 600');
       } finally {
         consoleSpy.mockRestore();
       }
@@ -1123,20 +1204,18 @@ describe('GraphicsPlugin', () => {
   });
 
   describe('API design cleanups (#32)', () => {
-    it('gtext-direction is the primary name and gtext-dire still works as an alias', () => {
+    it('gtext-direction works and the removed gtext-dire alias is not claimed', () => {
       const { plugin, ctx } = openPlugin();
       expect(call(plugin, 'gtext-direction', 'rtl')).toBe(InterpretedSymbol.of('t'));
       expect(ctx.direction).toBe('rtl');
-      expect(call(plugin, 'gtext-dire', 'ltr')).toBe(InterpretedSymbol.of('t'));
-      expect(ctx.direction).toBe('ltr');
+      expect(plugin.has(InterpretedSymbol.of('gtext-dire'))).toBe(false);
     });
 
-    it('gtext-baseline is the primary name and gtext-line still works as an alias', () => {
+    it('gtext-baseline works and the removed gtext-line alias is not claimed', () => {
       const { plugin, ctx } = openPlugin();
       expect(call(plugin, 'gtext-baseline', 'middle')).toBe(InterpretedSymbol.of('t'));
       expect(ctx.textBaseline).toBe('middle');
-      expect(call(plugin, 'gtext-line', 'top')).toBe(InterpretedSymbol.of('t'));
-      expect(ctx.textBaseline).toBe('top');
+      expect(plugin.has(InterpretedSymbol.of('gtext-line'))).toBe(false);
     });
 
     it('gpattern accepts a string repetition keyword', () => {
@@ -1146,9 +1225,9 @@ describe('GraphicsPlugin', () => {
       );
     });
 
-    it('gpattern rejects the legacy numeric repetition flag', () => {
+    it('gpattern signals an EvalError for the legacy numeric repetition flag', () => {
       const { plugin } = openPlugin();
-      expect(call(plugin, 'gpattern', 'https://example.test/p.png', 1)).toBe(Cons.nil);
+      expectSignals(() => call(plugin, 'gpattern', 'https://example.test/p.png', 1));
     });
 
     const invalidEnumCases: Array<{ name: string; args: LispValue[] }> = [
@@ -1165,20 +1244,22 @@ describe('GraphicsPlugin', () => {
       { name: 'gpattern', args: ['src', 'bogus'] },
     ];
 
-    it.each(invalidEnumCases)('$name rejects a value outside the allowlist', ({ name, args }) => {
-      const { plugin } = openPlugin();
-      expect(call(plugin, name, ...args)).toBe(Cons.nil);
-    });
+    it.each(invalidEnumCases)(
+      '$name signals an EvalError for a value outside the allowlist',
+      ({ name, args }) => {
+        const { plugin } = openPlugin();
+        expectSignals(() => call(plugin, name, ...args), 'Expected');
+      },
+    );
   });
 
   describe('error paths', () => {
     describe('closed canvas', () => {
       const closedSymbols = GraphicsPlugin.functionNames().filter((name) => name !== 'gopen');
 
-      it.each(closedSymbols)('%s returns nil when the canvas is closed', (name) => {
+      it.each(closedSymbols)('%s signals an EvalError when the canvas is closed', (name) => {
         const { plugin } = makePlugin();
-        const result = plugin.apply(InterpretedSymbol.of(name), Cons.nil, makeContext());
-        expect(result).toBe(Cons.nil);
+        expectSignals(() => plugin.apply(InterpretedSymbol.of(name), Cons.nil, makeContext()));
       });
     });
 
@@ -1210,9 +1291,9 @@ describe('GraphicsPlugin', () => {
         { name: 'gstroke-text', args: [42, 1, 2] },
         { name: 'gstroke-tri', args: [1, 2, 3, 4, 5, 'x'] },
         { name: 'gtext-align', args: [1] },
-        { name: 'gtext-dire', args: [1] },
+        { name: 'gtext-direction', args: [1] },
         { name: 'gtext-font', args: [1] },
-        { name: 'gtext-line', args: [1] },
+        { name: 'gtext-baseline', args: [1] },
         { name: 'gtranslate', args: [1, 'x'] },
         { name: 'grect', args: [1, 2, 3, 'x'] },
         { name: 'grotate', args: ['x'] },
@@ -1246,16 +1327,13 @@ describe('GraphicsPlugin', () => {
       ];
 
       it.each(typeMismatchCases)(
-        '$name returns nil for a type-mismatched argument',
+        '$name signals an EvalError for a type-mismatched argument',
         ({ name, args }) => {
           const { plugin } = makePlugin();
           plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-          const result = plugin.apply(
-            InterpretedSymbol.of(name),
-            arguments_(...args),
-            makeContext(),
+          expectSignals(() =>
+            plugin.apply(InterpretedSymbol.of(name), arguments_(...args), makeContext()),
           );
-          expect(result).toBe(Cons.nil);
         },
       );
     });
@@ -1292,9 +1370,9 @@ describe('GraphicsPlugin', () => {
         { name: 'gstroke-text', args: ['a', 1] },
         { name: 'gstroke-tri', args: [1, 2, 3, 4, 5] },
         { name: 'gtext-align', args: ['left', 'right'] },
-        { name: 'gtext-dire', args: ['ltr', 'rtl'] },
+        { name: 'gtext-direction', args: ['ltr', 'rtl'] },
         { name: 'gtext-font', args: ['a', 'b'] },
-        { name: 'gtext-line', args: ['top', 'middle'] },
+        { name: 'gtext-baseline', args: ['top', 'middle'] },
         { name: 'gtranslate', args: [1] },
         { name: 'grect', args: [1, 2, 3] },
         { name: 'grotate', args: [1, 2] },
@@ -1319,11 +1397,46 @@ describe('GraphicsPlugin', () => {
         { name: 'gconic-gradient', args: [0, 0, 0] },
       ];
 
-      it.each(arityCases)('$name returns nil for a wrong argument count', ({ name, args }) => {
+      it.each(arityCases)(
+        '$name signals an EvalError for a wrong argument count',
+        ({ name, args }) => {
+          const { plugin } = makePlugin();
+          plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
+          expectSignals(() =>
+            plugin.apply(InterpretedSymbol.of(name), arguments_(...args), makeContext()),
+          );
+        },
+      );
+
+      const zeroArgumentNames = [
+        'gclip',
+        'gfill',
+        'gfinish-path',
+        'gheight',
+        'greset',
+        'greset-transform',
+        'grestore',
+        'gsave',
+        'gstart-path',
+        'gstroke',
+        'gwidth',
+      ];
+
+      it.each(zeroArgumentNames)('%s signals an EvalError when given any argument', (name) => {
+        const { plugin } = openPlugin();
+        expectSignals(() => call(plugin, name, 1));
+      });
+
+      it('gopen with an argument signals and leaves the canvas closed', () => {
         const { plugin } = makePlugin();
-        plugin.apply(InterpretedSymbol.of('gopen'), Cons.nil, makeContext());
-        const result = plugin.apply(InterpretedSymbol.of(name), arguments_(...args), makeContext());
-        expect(result).toBe(Cons.nil);
+        expectSignals(() => call(plugin, 'gopen', 1), 'Can not open.');
+        expect(plugin.isOpen).toBe(false);
+      });
+
+      it('gclose with an argument signals and leaves the canvas open', () => {
+        const { plugin } = openPlugin();
+        expectSignals(() => call(plugin, 'gclose', 1), 'Can not close.');
+        expect(plugin.isOpen).toBe(true);
       });
     });
   });
@@ -1367,7 +1480,7 @@ describe('GraphicsPlugin', () => {
     ];
 
     it.each(throwCases)(
-      '$name returns nil when the context throws',
+      '$name signals an EvalError when the context throws',
       ({ name, member, kind, args }) => {
         const { plugin, ctx } = openPlugin();
         const target = ctx as unknown as Record<string, unknown>;
@@ -1382,17 +1495,17 @@ describe('GraphicsPlugin', () => {
             },
           });
         }
-        expect(call(plugin, name, ...args)).toBe(Cons.nil);
+        expectSignals(() => call(plugin, name, ...args));
       },
     );
 
-    it('gopen returns nil when the context throws during the initial clear', () => {
+    it('gopen signals an EvalError when the context throws during the initial clear', () => {
       const { plugin } = makePlugin();
       const target = plugin.ctx as unknown as Record<string, unknown>;
       target.fillRect = () => {
         throw new Error('boom');
       };
-      expect(call(plugin, 'gopen')).toBe(Cons.nil);
+      expectSignals(() => call(plugin, 'gopen'), 'Can not open.');
     });
 
     it('gsleep busy-waits and returns t', () => {
@@ -1418,17 +1531,12 @@ describe('GraphicsPlugin', () => {
       return plugin;
     }
 
-    it('gsave-png without toDataURL support returns nil with a guard message', () => {
+    it('gsave-png without toDataURL support signals an EvalError with a guard message', () => {
       const plugin = makeOffscreenPlugin(() => Promise.resolve({}));
-      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
-      try {
-        expect(call(plugin, 'gsave-png')).toBe(Cons.nil);
-        expect(spy).toHaveBeenCalledWith(
-          'Can not save png. Browser download needs a DOM and an HTMLCanvasElement; pass a file path to save on Node.js.\n',
-        );
-      } finally {
-        spy.mockRestore();
-      }
+      expectSignals(
+        () => call(plugin, 'gsave-png'),
+        'Can not save png. Browser download needs a DOM and an HTMLCanvasElement; pass a file path to save on Node.js.',
+      );
     });
 
     it('gsave-png writes via convertToBlob for an OffscreenCanvas-like canvas', async () => {
@@ -1449,36 +1557,62 @@ describe('GraphicsPlugin', () => {
       }
     });
 
-    it('gsave-png with a path returns nil when Node fs is unavailable', () => {
+    it('gsave-png with a path signals an EvalError when Node fs is unavailable', () => {
       const { plugin } = openPlugin();
-      const write = vi.fn().mockReturnValue(true);
-      vi.stubGlobal('process', { stderr: { write } });
+      vi.stubGlobal('process', { stderr: { write: vi.fn().mockReturnValue(true) } });
       try {
-        expect(call(plugin, 'gsave-png', 'never-written.png')).toBe(Cons.nil);
-        expect(write).toHaveBeenCalledWith(
-          'Can not save png. Saving to a file path requires Node.js.\n',
+        expectSignals(
+          () => call(plugin, 'gsave-png', 'never-written.png'),
+          'Can not save png. Saving to a file path requires Node.js.',
         );
       } finally {
         vi.unstubAllGlobals();
       }
     });
 
-    it('gsave-jpeg download returns nil when toDataURL throws (tainted canvas)', () => {
-      const { canvas, plugin } = makePlugin();
-      call(plugin, 'gopen');
-      canvas.toDataURL = () => {
-        throw new Error('tainted');
-      };
-      expect(call(plugin, 'gsave-jpeg')).toBe(Cons.nil);
+    it('gsave-png with a path signals an EvalError in a plain browser with no process shim', () => {
+      const { plugin } = openPlugin();
+      const pathArguments = arguments_('never-written.png');
+      vi.stubGlobal('process', undefined);
+      try {
+        expectSignals(
+          () => plugin.gSavePng(pathArguments),
+          'Can not save png. Saving to a file path requires Node.js.',
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
-    it('gsave-jpeg with a path returns nil when toDataURL throws', () => {
+    it('gsave-png prints a diagnostic when the async OffscreenCanvas write fails', async () => {
+      const plugin = makeOffscreenPlugin(() => Promise.reject(new Error('encode failed')));
+      const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      try {
+        expect(call(plugin, 'gsave-png', 'never-written.png')).toBe(InterpretedSymbol.of('t'));
+        await vi.waitFor(() => {
+          expect(spy).toHaveBeenCalledWith('Can not save png.\n');
+        });
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('gsave-jpeg download signals an EvalError when toDataURL throws (tainted canvas)', () => {
       const { canvas, plugin } = makePlugin();
       call(plugin, 'gopen');
       canvas.toDataURL = () => {
         throw new Error('tainted');
       };
-      expect(call(plugin, 'gsave-jpeg', 'never-written.jpeg')).toBe(Cons.nil);
+      expectSignals(() => call(plugin, 'gsave-jpeg'), "you can't save jpeg.");
+    });
+
+    it('gsave-jpeg with a path signals an EvalError when toDataURL throws', () => {
+      const { canvas, plugin } = makePlugin();
+      call(plugin, 'gopen');
+      canvas.toDataURL = () => {
+        throw new Error('tainted');
+      };
+      expectSignals(() => call(plugin, 'gsave-jpeg', 'never-written.jpeg'), 'Can not save jpeg.');
     });
   });
 
@@ -1507,8 +1641,44 @@ describe('GraphicsPlugin', () => {
       expect(fillRect).toHaveBeenCalledWith(5, 10, 50, 30);
     });
 
+    it('accepts exact rationals from v3 division in Lisp source', () => {
+      interpreter.evalString('(gopen)');
+      fillRect.mockClear();
+      interpreter.evalString('(gfill-rect (/ 5 2) 10 50 30)');
+      expect(fillRect).toHaveBeenCalledWith(2.5, 10, 50, 30);
+    });
+
+    it('gwidth returns an exact integer under v3 (integerp → t)', () => {
+      interpreter.evalString('(gopen)');
+      expect(interpreter.evalString('(gwidth)')).toBe(200n);
+      expect(interpreter.evalString('(integerp (gwidth))')).toBe(InterpretedSymbol.of('t'));
+    });
+
     it('falls through to built-ins for non-g... symbols', () => {
-      expect(interpreter.evalString('(+ 1 2 3)')).toBe(6);
+      expect(interpreter.evalString('(+ 1 2 3)')).toBe(6n);
+    });
+
+    it('handler-case intercepts a plugin failure via the eval-error clause', () => {
+      interpreter.evalString('(gopen)');
+      expect(interpreter.evalString('(handler-case (gfill-rect 1) (eval-error (e) e))')).toBe(
+        'Can not draw fill rectangle.',
+      );
+    });
+
+    it('handler-case intercepts a closed-canvas failure via the error clause', () => {
+      expect(interpreter.evalString('(handler-case (gfill-rect 1 2 3 4) (error (e) e))')).toBe(
+        'The canvas is closed and cannot be executed.',
+      );
+    });
+
+    it('handler-case returns the protected form value when nothing signals', () => {
+      interpreter.evalString('(gopen)');
+      expect(interpreter.evalString('(handler-case (gwidth) (eval-error (e) e))')).toBe(200n);
+    });
+
+    it('an unhandled plugin failure reaches the library caller as an EvalError', () => {
+      interpreter.evalString('(gopen)');
+      expectSignals(() => interpreter.evalString('(gfill-rect 1)'), 'Can not draw fill rectangle.');
     });
   });
 });

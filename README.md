@@ -48,6 +48,7 @@ pnpm add kei-lisp-plugin-graphics kei-lisp
 ```
 
 `kei-lisp` is a **peer dependency**; install both into your project. Requires
+**kei-lisp >= 3.0.1** (for kei-lisp 2.x use kei-lisp-plugin-graphics 3.x) and
 **Node.js >= 24** for the build toolchain (the plugin itself targets any
 environment that exposes a `CanvasRenderingContext2D`).
 
@@ -69,7 +70,7 @@ interpreter.evalString(`
   (gstroke-color "black")
   (gline-width 2)
   (gstroke-rect 10 10 120 80)
-  (gclose)
+  (gclose) ; note: gclose clears the canvas — omit it to keep the drawing visible
 `);
 ```
 
@@ -78,11 +79,9 @@ interpreter.evalString(`
 ## API
 
 ```ts
-import type { KeiLispPlugin } from 'kei-lisp';
-
 export function createGraphicsPlugin(options: {
   canvas: HTMLCanvasElement | OffscreenCanvas;
-}): KeiLispPlugin;
+}): GraphicsPlugin;
 ```
 
 The returned plugin implements the [`KeiLispPlugin`](https://github.com/ike-keichan/kei-lisp/blob/main/docs/plugins.md)
@@ -103,18 +102,36 @@ canvas's 2D rendering context.
 | State          | `gsave`, `grestore`                                                                                                                                                                                                                                                 |
 | Image / export | `gimage`, `gsave-png`, `gsave-jpeg`, `gclear-rect`, `gpixel`, `gset-pixel`                                                                                                                                                                                          |
 
-Each function returns `t` on success. See [`docs/graphics.md`](./docs/graphics.md)
-for argument signatures and side effects.
+Each function returns `t` on success; failures signal an evaluation error
+that Lisp code can intercept with `(handler-case … (eval-error (e) …))`.
+See [`docs/graphics.md`](./docs/graphics.md) for argument signatures and
+side effects.
+
+## Bundled Lisp patterns
+
+The package ships loadable `.lisp` pattern files under `lisp/` — a grid
+helper (`ggrid`), color-palette helpers (`gpalette` / `gpalette-color`),
+and a frame-loop helper (`ganimate`):
+
+```lisp
+(load "node_modules/kei-lisp-plugin-graphics/lisp/grid.lisp")
+(gopen)
+(ggrid 40)
+```
+
+`load` reads from the filesystem (Node.js); browser hosts can fetch the
+file's text and evaluate it instead. See
+[`docs/patterns.md`](./docs/patterns.md) for the full list.
 
 ## Environment support
 
-| Capability                            | Browser (`HTMLCanvasElement`)                            | `OffscreenCanvas` (worker) | Node.js (e.g. `@napi-rs/canvas`) |
-| ------------------------------------- | -------------------------------------------------------- | -------------------------- | -------------------------------- |
-| Drawing primitives (`g…`)             | ✅                                                       | ✅                         | ✅                               |
-| `gimage` / `gpattern` (image loading) | ✅                                                       | ⚠️ needs a global `Image`  | ❌ returns `nil`                 |
-| `gsave-png` / `gsave-jpeg` (download) | ✅                                                       | ❌ returns `nil`           | ❌ returns `nil`                 |
-| `gsave-png` / `gsave-jpeg` (`path`)   | ❌ returns `nil`                                         | ⚠️ async `convertToBlob`   | ✅                               |
-| Diagnostics                           | `console.error` (or host-provided `process.stderr` shim) | same                       | `process.stderr`                 |
+| Capability                            | Browser (`HTMLCanvasElement`)                            | `OffscreenCanvas` (worker)                        | Node.js (e.g. `@napi-rs/canvas`) |
+| ------------------------------------- | -------------------------------------------------------- | ------------------------------------------------- | -------------------------------- |
+| Drawing primitives (`g…`)             | ✅                                                       | ✅                                                | ✅                               |
+| `gimage` / `gpattern` (image loading) | ✅                                                       | ⚠️ needs a global `Image`                         | ❌ signals an error              |
+| `gsave-png` / `gsave-jpeg` (download) | ✅                                                       | ❌ signals an error                               | ❌ signals an error              |
+| `gsave-png` / `gsave-jpeg` (`path`)   | ❌ signals an error                                      | ⚠️ needs Node's `process` (async `convertToBlob`) | ✅                               |
+| Diagnostics                           | `console.error` (or host-provided `process.stderr` shim) | same                                              | `process.stderr`                 |
 
 ## Reference
 
@@ -125,6 +142,7 @@ In-depth documentation of each area:
 - [API docs (TypeDoc)](https://ike-keichan.github.io/kei-lisp-plugin-graphics/api/) — generated API documentation
 - [API Reference](./docs/api.md) — TypeScript / JavaScript API
 - [Graphics Reference](./docs/graphics.md) — every `g…` Lisp function
+- [Bundled Lisp Patterns](./docs/patterns.md) — the loadable `.lisp` helpers shipped under `lisp/`
 - [Non-goals](./docs/non-goals.md) — what this project deliberately does not do
 - [kei-lisp Plugin Guide](https://github.com/ike-keichan/kei-lisp/blob/main/docs/plugins.md) — how plugins integrate with the interpreter
 

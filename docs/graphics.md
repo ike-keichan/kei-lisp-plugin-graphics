@@ -1,30 +1,61 @@
 # Graphics Reference
 
 All `g…` Lisp functions exposed by `kei-lisp-plugin-graphics`. Each function
-returns the symbol `t` on success and `nil` on failure (wrong arity, type
-mismatch, or canvas not open) — except the value-returning functions
+returns the symbol `t` on success — except the value-returning functions
 (`gwidth`, `gheight`, `gmeasure-text`, `gpixel`, `gis-point-in-path`,
-`gis-point-in-stroke`), which return their documented value on success and
-`nil` on failure.
+`gis-point-in-stroke`), which return their documented value.
+
+Failures (wrong arity, type mismatch, canvas not open, canvas-level errors)
+signal an **evaluation error** that Lisp callers can intercept with
+`handler-case`; the clause variable is bound to the error message:
+
+```lisp
+(gopen)
+(handler-case (gfill-rect 10)
+  (eval-error (e) e))            ; => "Can not draw fill rectangle."
+```
+
+An unhandled error aborts evaluation and is reported at the interpreter
+boundary (the REPL prints it; library callers catch it as a kei-lisp
+`EvalError`). One deliberate exception: the color-taking functions
+(`gcolor`, `gfill-color`, `gstroke-color`, `gshadow-color`, `gclear`)
+parse their color best-effort. Given at least one argument, a malformed
+color _shape_ (an unsupported component count, or non-numbers in an
+RGB/RGBA tuple) prints a diagnostic and falls back to `"black"` instead
+of signaling, and a color _string_ is passed to the canvas as-is (the
+canvas silently ignores invalid strings and keeps the previous color).
+Calling them with no arguments signals as usual — except `gclear`,
+whose no-argument form paints the canvas white.
+
+Numeric arguments accept any kei-lisp v3 number — integer, float, or exact
+rational (e.g. the result of `(/ 5 2)`) — and are converted to floats before
+they reach the Canvas API. Value-returning functions follow the v3 numeric
+tower: `gwidth` / `gheight` / `gpixel` return exact integers
+(`(integerp (gwidth))` → `t`), while `gmeasure-text` returns a float.
 
 Enum-string setters (`gline-cap`, `gline-join`, `gtext-align`,
 `gtext-baseline`, `gtext-direction`, `gcomposite`, `gfont-kerning`,
 `gfont-stretch`, `gfont-variant`, `gtext-rendering`, `gimage-smoothing`, and
 `gpattern`'s repetition) validate their argument against the Canvas API's
-allowed values and return `nil` with a diagnostic for anything else.
-Diagnostics are written to `process.stderr` (kei-lisp convention); browser
-hosts typically redirect this to their output panel.
+allowed values and signal an error listing the expected values for anything
+else.
+
+Diagnostics from asynchronous work — image loading (`gimage` /
+`gpattern`) and `OffscreenCanvas` file writes, which fail after the call has
+already returned — plus the best-effort color fallback above and `gopen`'s
+informational size line go to `process.stderr` (kei-lisp convention);
+browser hosts typically redirect this to their output panel.
 
 ## Lifecycle
 
 | Function  | Arguments    | Description                                                                                                        |
 | --------- | ------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `gopen`   | —            | Open the canvas (acquire 2D context, set `isOpen` to true)                                                         |
-| `gclose`  | —            | Close the canvas                                                                                                   |
+| `gopen`   | —            | Open the canvas (validate the 2D context, paint it white, set `isOpen` to true)                                    |
+| `gclose`  | —            | Close the canvas (clears it to transparent)                                                                        |
 | `gclear`  | — or `color` | Paint the entire canvas white, or with the given color (string / RGB / RGBA); the current `fillStyle` is preserved |
 | `greset`  | —            | Reset the context to its default state (`ctx.reset`)                                                               |
-| `gwidth`  | —            | Return the canvas width in pixels (number)                                                                         |
-| `gheight` | —            | Return the canvas height in pixels (number)                                                                        |
+| `gwidth`  | —            | Return the canvas width in pixels (integer)                                                                        |
+| `gheight` | —            | Return the canvas height in pixels (integer)                                                                       |
 | `gsleep`  | `ms: number` | Pause execution for `ms` milliseconds (busy-wait: blocks the thread and burns CPU — avoid long sleeps)             |
 
 ## Path
@@ -61,34 +92,34 @@ hosts typically redirect this to their output panel.
 
 ## Style
 
-| Function            | Arguments                                                      | Description                                                                                   |
-| ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `gcolor`            | `color: string`                                                | Set both fill and stroke color                                                                |
-| `gfill-color`       | `color: string`                                                | Set fill color (`fillStyle`)                                                                  |
-| `gstroke-color`     | `color: string`                                                | Set stroke color (`strokeStyle`)                                                              |
-| `gline-width`       | `width: number`                                                | Set line width                                                                                |
-| `gline-cap`         | `cap: string`                                                  | Set line cap (`"butt"` / `"round"` / `"square"`)                                              |
-| `gline-join`        | `join: string`                                                 | Set line join (`"miter"` / `"round"` / `"bevel"`)                                             |
-| `galpha`            | `alpha: number`                                                | Set global alpha (0.0–1.0)                                                                    |
-| `gpattern`          | `src: string, repetition: string`                              | Set fill style to an image pattern (`"repeat"` / `"repeat-x"` / `"repeat-y"` / `"no-repeat"`) |
-| `gline-dash`        | `seg1: number, seg2: number, ...`                              | Set the line dash pattern (`setLineDash`); no arguments clears it                             |
-| `gline-dash-offset` | `offset: number`                                               | Set the dash offset (`lineDashOffset`)                                                        |
-| `gmiter-limit`      | `limit: number`                                                | Set the miter limit (`miterLimit`)                                                            |
-| `gcomposite`        | `op: string`                                                   | Set the compositing operation (`globalCompositeOperation`, e.g. `"multiply"`)                 |
-| `gfilter`           | `filter: string`                                               | Set the CSS filter (`ctx.filter`, e.g. `"blur(2px)"`)                                         |
-| `gimage-smoothing`  | `quality: string`                                              | `"off"` disables smoothing; `"low"` / `"medium"` / `"high"` enable it at that quality         |
-| `glinear-gradient`  | `x0, y0, x1, y1, offset1: number, color1: string, ...`         | Set fill and stroke style to a linear gradient (≥ 1 offset/color pair)                        |
-| `gradial-gradient`  | `x0, y0, r0, x1, y1, r1, offset1: number, color1: string, ...` | Set fill and stroke style to a radial gradient                                                |
-| `gconic-gradient`   | `angle: number, x, y, offset1: number, color1: string, ...`    | Set fill and stroke style to a conic gradient; `angle` in degrees                             |
+| Function            | Arguments                                                      | Description                                                                                                 |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `gcolor`            | `color: string` or `r, g, b[, a]: number`                      | Set both fill and stroke color (string / RGB / RGBA)                                                        |
+| `gfill-color`       | `color: string` or `r, g, b[, a]: number`                      | Set fill color (`fillStyle`)                                                                                |
+| `gstroke-color`     | `color: string` or `r, g, b[, a]: number`                      | Set stroke color (`strokeStyle`)                                                                            |
+| `gline-width`       | `width: number`                                                | Set line width                                                                                              |
+| `gline-cap`         | `cap: string`                                                  | Set line cap (`"butt"` / `"round"` / `"square"`)                                                            |
+| `gline-join`        | `join: string`                                                 | Set line join (`"miter"` / `"round"` / `"bevel"`)                                                           |
+| `galpha`            | `alpha: number`                                                | Set global alpha (0.0–1.0)                                                                                  |
+| `gpattern`          | `src: string, repetition: string`                              | Set fill style to an image pattern (`"repeat"` / `"repeat-x"` / `"repeat-y"` / `"no-repeat"`)               |
+| `gline-dash`        | `seg1: number, seg2: number, ...`                              | Set the line dash pattern (`setLineDash`); no arguments clears it. Segments must be non-negative and finite |
+| `gline-dash-offset` | `offset: number`                                               | Set the dash offset (`lineDashOffset`)                                                                      |
+| `gmiter-limit`      | `limit: number`                                                | Set the miter limit (`miterLimit`)                                                                          |
+| `gcomposite`        | `op: string`                                                   | Set the compositing operation (`globalCompositeOperation`, e.g. `"multiply"`)                               |
+| `gfilter`           | `filter: string`                                               | Set the CSS filter (`ctx.filter`, e.g. `"blur(2px)"`)                                                       |
+| `gimage-smoothing`  | `quality: string`                                              | `"off"` disables smoothing; `"low"` / `"medium"` / `"high"` enable it at that quality                       |
+| `glinear-gradient`  | `x0, y0, x1, y1, offset1: number, color1: string, ...`         | Set fill and stroke style to a linear gradient (≥ 1 offset/color pair)                                      |
+| `gradial-gradient`  | `x0, y0, r0, x1, y1, r1, offset1: number, color1: string, ...` | Set fill and stroke style to a radial gradient                                                              |
+| `gconic-gradient`   | `angle: number, x, y, offset1: number, color1: string, ...`    | Set fill and stroke style to a conic gradient; `angle` in degrees                                           |
 
 ## Shadow
 
-| Function          | Arguments       | Description            |
-| ----------------- | --------------- | ---------------------- |
-| `gshadow-color`   | `color: string` | Set shadow color       |
-| `gshadow-blur`    | `blur: number`  | Set shadow blur radius |
-| `gshadow-offsetx` | `x: number`     | Set shadow X offset    |
-| `gshadow-offsety` | `y: number`     | Set shadow Y offset    |
+| Function          | Arguments                                 | Description                            |
+| ----------------- | ----------------------------------------- | -------------------------------------- |
+| `gshadow-color`   | `color: string` or `r, g, b[, a]: number` | Set shadow color (string / RGB / RGBA) |
+| `gshadow-blur`    | `blur: number`                            | Set shadow blur radius                 |
+| `gshadow-offsetx` | `x: number`                               | Set shadow X offset                    |
+| `gshadow-offsety` | `y: number`                               | Set shadow Y offset                    |
 
 ## Text
 
@@ -108,10 +139,6 @@ hosts typically redirect this to their output panel.
 
 `gfill-text` and `gstroke-text` also accept an optional fourth argument
 `maxWidth: number` that scales the text to fit within that width.
-
-`gtext-line` and `gtext-dire` are deprecated aliases of `gtext-baseline` and
-`gtext-direction`, kept for backward compatibility with the legacy Graphist
-names.
 
 ## Transform
 
@@ -177,7 +204,7 @@ Reading values back — these functions return a value instead of `t`:
 
 ```lisp
 (gwidth)                         ; => 640
-(gmeasure-text "Hello")          ; => 31.5 (pixels, depends on the font)
+(gmeasure-text "Hello")          ; => 21.6 (a float; the exact value depends on the font)
 (gpixel 10 10)                   ; => (255 255 255 255)
 (gis-point-in-path 200 150)      ; => t or nil
 ```
