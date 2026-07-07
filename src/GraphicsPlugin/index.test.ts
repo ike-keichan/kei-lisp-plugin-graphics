@@ -903,6 +903,12 @@ describe('GraphicsPlugin', () => {
       expect(ctx.setLineDash).toHaveBeenCalledWith([]);
     });
 
+    it('gline-dash signals an EvalError for a negative segment instead of a no-op success', () => {
+      const { plugin, ctx } = openPlugin();
+      expectSignals(() => call(plugin, 'gline-dash', 6, -4), 'Can not set line dash.');
+      expect(ctx.setLineDash).not.toHaveBeenCalled();
+    });
+
     it('gline-dash-offset and gmiter-limit write their properties', () => {
       const { plugin, ctx } = openPlugin();
       call(plugin, 'gline-dash-offset', 4);

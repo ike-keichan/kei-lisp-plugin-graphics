@@ -105,6 +105,14 @@ describe('bundled Lisp patterns (lisp/)', () => {
       expect(interpreter.evalString('(gpalette -9)')).toBe('#9c755f');
     });
 
+    it('gpalette signals an EvalError for a non-integer index', () => {
+      const { interpreter } = makeInterpreter();
+      interpreter.evalString('(load "lisp/palette.lisp")');
+      expect(interpreter.evalString('(handler-case (gpalette 2.5) (eval-error (e) e))')).toBe(
+        'gpalette: index must be an integer',
+      );
+    });
+
     it('gpalette-color sets fill and stroke color to the palette entry', () => {
       const { interpreter, ctx } = makeInterpreter();
       interpreter.evalString('(load "lisp/palette.lisp")');

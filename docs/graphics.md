@@ -92,25 +92,25 @@ browser hosts typically redirect this to their output panel.
 
 ## Style
 
-| Function            | Arguments                                                      | Description                                                                                   |
-| ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `gcolor`            | `color: string` or `r, g, b[, a]: number`                      | Set both fill and stroke color (string / RGB / RGBA)                                          |
-| `gfill-color`       | `color: string` or `r, g, b[, a]: number`                      | Set fill color (`fillStyle`)                                                                  |
-| `gstroke-color`     | `color: string` or `r, g, b[, a]: number`                      | Set stroke color (`strokeStyle`)                                                              |
-| `gline-width`       | `width: number`                                                | Set line width                                                                                |
-| `gline-cap`         | `cap: string`                                                  | Set line cap (`"butt"` / `"round"` / `"square"`)                                              |
-| `gline-join`        | `join: string`                                                 | Set line join (`"miter"` / `"round"` / `"bevel"`)                                             |
-| `galpha`            | `alpha: number`                                                | Set global alpha (0.0–1.0)                                                                    |
-| `gpattern`          | `src: string, repetition: string`                              | Set fill style to an image pattern (`"repeat"` / `"repeat-x"` / `"repeat-y"` / `"no-repeat"`) |
-| `gline-dash`        | `seg1: number, seg2: number, ...`                              | Set the line dash pattern (`setLineDash`); no arguments clears it                             |
-| `gline-dash-offset` | `offset: number`                                               | Set the dash offset (`lineDashOffset`)                                                        |
-| `gmiter-limit`      | `limit: number`                                                | Set the miter limit (`miterLimit`)                                                            |
-| `gcomposite`        | `op: string`                                                   | Set the compositing operation (`globalCompositeOperation`, e.g. `"multiply"`)                 |
-| `gfilter`           | `filter: string`                                               | Set the CSS filter (`ctx.filter`, e.g. `"blur(2px)"`)                                         |
-| `gimage-smoothing`  | `quality: string`                                              | `"off"` disables smoothing; `"low"` / `"medium"` / `"high"` enable it at that quality         |
-| `glinear-gradient`  | `x0, y0, x1, y1, offset1: number, color1: string, ...`         | Set fill and stroke style to a linear gradient (≥ 1 offset/color pair)                        |
-| `gradial-gradient`  | `x0, y0, r0, x1, y1, r1, offset1: number, color1: string, ...` | Set fill and stroke style to a radial gradient                                                |
-| `gconic-gradient`   | `angle: number, x, y, offset1: number, color1: string, ...`    | Set fill and stroke style to a conic gradient; `angle` in degrees                             |
+| Function            | Arguments                                                      | Description                                                                                                 |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `gcolor`            | `color: string` or `r, g, b[, a]: number`                      | Set both fill and stroke color (string / RGB / RGBA)                                                        |
+| `gfill-color`       | `color: string` or `r, g, b[, a]: number`                      | Set fill color (`fillStyle`)                                                                                |
+| `gstroke-color`     | `color: string` or `r, g, b[, a]: number`                      | Set stroke color (`strokeStyle`)                                                                            |
+| `gline-width`       | `width: number`                                                | Set line width                                                                                              |
+| `gline-cap`         | `cap: string`                                                  | Set line cap (`"butt"` / `"round"` / `"square"`)                                                            |
+| `gline-join`        | `join: string`                                                 | Set line join (`"miter"` / `"round"` / `"bevel"`)                                                           |
+| `galpha`            | `alpha: number`                                                | Set global alpha (0.0–1.0)                                                                                  |
+| `gpattern`          | `src: string, repetition: string`                              | Set fill style to an image pattern (`"repeat"` / `"repeat-x"` / `"repeat-y"` / `"no-repeat"`)               |
+| `gline-dash`        | `seg1: number, seg2: number, ...`                              | Set the line dash pattern (`setLineDash`); no arguments clears it. Segments must be non-negative and finite |
+| `gline-dash-offset` | `offset: number`                                               | Set the dash offset (`lineDashOffset`)                                                                      |
+| `gmiter-limit`      | `limit: number`                                                | Set the miter limit (`miterLimit`)                                                                          |
+| `gcomposite`        | `op: string`                                                   | Set the compositing operation (`globalCompositeOperation`, e.g. `"multiply"`)                               |
+| `gfilter`           | `filter: string`                                               | Set the CSS filter (`ctx.filter`, e.g. `"blur(2px)"`)                                                       |
+| `gimage-smoothing`  | `quality: string`                                              | `"off"` disables smoothing; `"low"` / `"medium"` / `"high"` enable it at that quality                       |
+| `glinear-gradient`  | `x0, y0, x1, y1, offset1: number, color1: string, ...`         | Set fill and stroke style to a linear gradient (≥ 1 offset/color pair)                                      |
+| `gradial-gradient`  | `x0, y0, r0, x1, y1, r1, offset1: number, color1: string, ...` | Set fill and stroke style to a radial gradient                                                              |
+| `gconic-gradient`   | `angle: number, x, y, offset1: number, color1: string, ...`    | Set fill and stroke style to a conic gradient; `angle` in degrees                                           |
 
 ## Shadow
 

@@ -1088,6 +1088,10 @@ export class GraphicsPlugin implements KeiLispPlugin {
     return this.#execute('Can not set line dash.', (context) => {
       const segments = this.#numbers(arguments_, arguments_.length());
       if (segments === null) return null;
+      // The Canvas spec ignores setLineDash when any segment is negative or
+      // non-finite; reject those instead of reporting a success that never
+      // took effect (or, on some engines, stored an invalid dash).
+      if (segments.some((segment) => !Number.isFinite(segment) || segment < 0)) return null;
       context.setLineDash(segments);
       return InterpretedSymbol.of('t');
     });

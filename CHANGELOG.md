@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`gline-dash` rejects negative or non-finite segments.** The Canvas API
+  silently ignores such a `setLineDash` call (or, on some engines, stores
+  an invalid dash), so the plugin used to report success (`t`) for a call
+  that never took effect; it now signals an evaluation error.
+- **`gpalette` (bundled `lisp/palette.lisp`) signals on a non-integer
+  index.** A palette slot is discrete, so `(gpalette 2.5)` used to return
+  `nil` — and `(gpalette-color 2.5)` then painted black — instead of
+  reporting the bad index; it now signals an error.
 - **The zero-argument functions now enforce their arity.** `gopen` /
   `gclose` / `gwidth` / `gheight` / `greset` / `gstart-path` /
   `gfinish-path` / `gfill` / `gstroke` / `gclip` / `greset-transform` /
