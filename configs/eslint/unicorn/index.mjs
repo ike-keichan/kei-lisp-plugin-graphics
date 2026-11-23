@@ -31,6 +31,18 @@ export const unicornConfigs = [
       // NOTE: Lisp の linked list 走査で `let aCons = this; while (...) { aCons = aCons.cdr }` パターンが必然的に発生するため無効化
       // this のエイリアス代入を禁止
       'unicorn/no-this-assignment': OFF,
+      // NOTE: JSDoc / TSDoc は行頭に `*` を付ける標準の書き方で統一しているため無効化 (v80 で追加)
+      // ドキュメントコメントの行頭の `*` を取り除かせる
+      'unicorn/no-asterisk-prefix-in-documentation-comments': OFF,
+      // NOTE: `vi.spyOn()` の戻り値 (`spy`) を真偽値と誤検知するため無効化 (v80 で追加)
+      // 真偽値の変数名に `is` / `has` などの接頭辞を強制
+      'unicorn/consistent-boolean-name': OFF,
+      // NOTE: `/** ... */` の1行の JSDoc を書けなくなるため無効化 (v80 で追加)
+      // 1行のブロックコメントを複数行の形に強制
+      'unicorn/single-line-block-comment-style': OFF,
+      // NOTE: 早期 return のガード節 (`if (...) return null;`) まで三項演算子にまとめさせ、読みにくくなるため1行で書ける場合に限定
+      // if 文を三項演算子に置き換えさせる
+      'unicorn/prefer-ternary': [ERROR, 'only-single-line'],
     },
   },
 ];
