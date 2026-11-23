@@ -490,7 +490,6 @@ export class GraphicsPlugin implements KeiLispPlugin {
         const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
         // Uint8Array.fromBase64 is unavailable on Node 24 (the minimum supported
         // engine), so decode with Buffer instead.
-        // eslint-disable-next-line unicorn/prefer-uint8array-base64
         fs.writeFileSync(path, Buffer.from(base64, 'base64'));
         return InterpretedSymbol.of('t');
       }
@@ -1087,11 +1086,15 @@ export class GraphicsPlugin implements KeiLispPlugin {
   gLineDash(arguments_: Cons): LispValue {
     return this.#execute('Can not set line dash.', (context) => {
       const segments = this.#numbers(arguments_, arguments_.length());
-      if (segments === null) return null;
       // The Canvas spec ignores setLineDash when any segment is negative or
       // non-finite; reject those instead of reporting a success that never
       // took effect (or, on some engines, stored an invalid dash).
-      if (segments.some((segment) => !Number.isFinite(segment) || segment < 0)) return null;
+      if (
+        segments === null ||
+        segments.some((segment) => !Number.isFinite(segment) || segment < 0)
+      ) {
+        return null;
+      }
       context.setLineDash(segments);
       return InterpretedSymbol.of('t');
     });
@@ -1203,8 +1206,9 @@ export class GraphicsPlugin implements KeiLispPlugin {
 
   gMeasureText(arguments_: Cons): LispValue {
     return this.#execute('Can not measure text.', (context) => {
-      if (arguments_.length() !== 1 || !Cons.isString(arguments_.car)) return null;
-      return context.measureText(arguments_.car).width;
+      return arguments_.length() === 1 && Cons.isString(arguments_.car)
+        ? context.measureText(arguments_.car).width
+        : null;
     });
   }
 
